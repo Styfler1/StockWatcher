@@ -492,7 +492,22 @@ def get_live_price(symbol):
 @st.cache_data(ttl=3600)
 def get_stock_details(symbol):
     ticker = yf.Ticker(symbol)
-    return ticker.info
+    try:
+        # Megpróbáljuk lekérni az adatokat
+        info = ticker.info
+        if not info or len(info) < 5: # Ha üres vagy hiányos szótárt kapunk
+            raise Exception("Hiányos adatok")
+        return info
+    except Exception as e:
+        # Ha Rate Limit vagy bármi hiba van, visszaadunk egy alap szótárat, hogy ne omoljon össze az app
+        return {
+            'longName': symbol,
+            'currency': 'USD',
+            'sector': 'Unknown',
+            'marketCap': 0,
+            'trailingPE': 'N/A',
+            'fiftyTwoWeekHigh': 'N/A'
+        }
 
 
 @st.cache_data(ttl=3600) # 1 óráig megjegyzi az adatokat
