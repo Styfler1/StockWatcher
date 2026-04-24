@@ -4,3 +4,5 @@ pandas
 plotly
 requests
 openai
+google-generativeai
+streamlit-local-storage
