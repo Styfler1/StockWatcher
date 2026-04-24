@@ -1,0 +1,1496 @@
+import streamlit as st
+import requests
+import time
+import yfinance as yf
+import plotly.express as px
+import datetime
+import pandas as pd # <- EZ HIÁNYZOTT!
+import concurrent.futures
+import google.generativeai as genai
+from openai import OpenAI
+import re
+from streamlit_local_storage import LocalStorage
+import json
+
+
+
+# ==========================================
+# --- 1.2 MULTILANGUAGE DICTIONARY ---
+# ==========================================
+# Ebben a szótárban tároljuk az összes szöveget mindkét nyelven.
+translations = {
+    'hu': {
+        'page_title': "Tőzsde Figyelő",
+        'sidebar_central': "📈 Tőzsde Központ",
+        'sidebar_menu': ["📈 Tőzsde Figyelő", "💰 Portfólióm", "ℹ️ A programról"],
+        'sidebar_search': "🔍 Keresés",
+        'sidebar_trending': "🔥 Trending",
+        'sidebar_popular': "🌟 Népszerű",
+        'search_placeholder': "Írd be a nevet vagy kódot:",
+        'favorites': "⭐ Kedvencek",
+        'fav_check': "⭐ Kedvencnek jelölöm",
+        'buy_price': "Vásárlási ár (USD):",
+        'qty': "Mennyiség (db):",
+        'add_btn': "Hozzáadás",
+        'delete_btn': "Törlés",
+        'portfolio_title': "💰 Saját Portfólióm",
+        'portfolio_empty': "Még nincs semmi a portfóliódban.",
+        'add_stock_expander': "➕ Új részvény hozzáadása",
+        'search_stock': "🔍 Keress rá egy eszközre:",
+        'groq_help': "Ide másold be a gsk_ kezdetű kulcsod.",
+        'groq_warning': "⚠️ Adj meg egy Groq kulcsot az AI elemzésekhez!",
+        'current_price': "Aktuális ár:",
+        'period_radio': "Időtáv:",
+        'historical_fig_labels': {'Close': 'Árfolyam (USD)', 'index': 'Dátum'},
+        'notification_subheader': "🔔 Értesítések beállítása",
+        'news_and_analysis': "**Hírek és Elemzések**",
+        'request_news_toggle': "Hírek kérése",
+        'email_label': "E-mail a riasztásokhoz:",
+        'email_placeholder': "pelda@email.hu",
+        'email_saved': "✅ Mentve!",
+        'email_error': "❌ Érvénytelen formátum!",
+        'lower_limit': "**Alsó limit (Stop-Loss)**",
+        'upper_limit': "**Felső limit (Célár)**",
+        'limit_placeholder': "USD érték",
+        'toast_low': "🛑 beeett {low} USD alá!",
+        'toast_high': "💰 elérte a {high} USD-t!",
+        'chat_title': "💬 AI Pénzügyi Asszisztens",
+        'chat_init_msg': "Szia! Én vagyok az AI asszisztensed. Miben segíthetek a(z) {symbol} részvénnyel kapcsolatban?",
+        'chat_input_placeholder': "Kérj véleményt a(z) {symbol} részvényről...",
+        'ai_spinner': "Elemzés folyamatban...",
+        'system_prompt_base': "Te egy profi magyar pénzügyi asszisztens vagy. A felhasználó a(z) {selected} részvényt elemzi. A részvény jelenlegi ára: {current_price} USD.",
+        'ai_disclaimer': "⚠️ Az AI asszisztens által adott válaszok kizárólag edukációs és tájékoztató jellegűek, nem minősülnek pénzügyi tanácsadásnak.",
+        'about_title': "ℹ️ A programról",
+        'about_intro': "Üdvözlünk a Tőzsde Figyelő alkalmazásban!",
+        'about_goal_title': "🎯 A program célja",
+        'about_goal_text': """
+            Ez a program egy modern részvénykövető és portfóliómenedzser alkalmazás. Legfőbb funkciói:
+            * Valós idejű árfolyamok követése a világpiacon.
+            * Portfólió kezelés, nyereség és veszteség számítása.
+            * Okos értesítések kérése hírekről és árfolyamokról.
+            * AI alapú elemzés a hírek és a portfólió gyors értékelésére.
+            """,
+        'about_ai_title': "🤖 Mesterséges Intelligencia",
+        'about_ai_text': """
+            A program a villámgyors **Groq AI** technológiát használja.
+            Ennek használatához egy saját, ingyenes API kulcsra van szükséged, amelyet mindössze 2 perc alatt igényelhetsz a [Groq Console](https://console.groq.com/) weboldalán.
+            """,
+        'about_data_title': "🔒 Adatvédelem és Adatkezelés",
+        'about_data_info': """
+            **Semmilyen adatot nem tárolunk rólad szervereken!**
+            
+            Minden megadott adatod kizárólag a te saját böngésződ memóriájában (LocalStorage) tárolódik.
+            
+            *💡 Fontos: Ha egy másik számítógépről, másik böngészőből nyitod meg az oldalt, vagy törlöd a böngészési adatokat, a beállításaidat újra meg kell adnod!*
+            """,
+        'about_notif_title': "🔔 Értesítési rendszer",
+        'about_notif_text': """
+            Minden egyes részvényhez egyedi szabályokat állíthatsz be. A program e-mailen keresztül képes értesíteni téged, ha:
+            * Új, piacmozgató hír jelenik meg a cégről.
+            * Az árfolyam eléri az általad beállított **célárat** (Felső limit).
+            * Az árfolyam beesik a **kockázati szinted** alá (Alsó limit).
+            """,
+        'about_disclaimer_title': "⚠️ JOGI NYILATKOZAT",
+        'about_disclaimer_text': """
+            Az AI által készített elemzések, összefoglalók és a Portfólió Asszisztens válaszai **kizárólag tájékoztató jellegűek**.
+            
+            Az AI **nem helyettesíti a képesített pénzügyi szakembereket**, és az általa generált tartalom **semmilyen formában nem minősül befektetési vagy pénzügyi tanácsadásnak**.
+            """,
+        'port_chat_title': "🤖 Portfólió Menedzser Asszisztens",
+        'port_chat_init': "Szia! Én vagyok az AI Portfólió Menedzsered. Átnéztem a fenti adataidat. Miben segíthetek?",
+        'port_chat_input': "Kérj véleményt a portfóliódról...",
+        'port_chat_system_base': "Te egy profi magyar pénzügyi elemző vagy. A felhasználó portfóliója így néz ki:"
+    },
+    'en': {
+        'page_title': "Stock Watcher",
+        'sidebar_central': "📈 Stock Hub",
+        'sidebar_menu': ["📈 Stock Hub", "💰 My Portfolio", "ℹ️ About"],
+        'sidebar_search': "🔍 Search",
+        'sidebar_trending': "🔥 Trending",
+        'sidebar_popular': "🌟 Popular",
+        'search_placeholder': "Enter name or symbol:",
+        'favorites': "⭐ Favorites",
+        'fav_check': "⭐ Add to Favorites",
+        'buy_price': "Purchase Price (USD):",
+        'qty': "Quantity (pcs):",
+        'add_btn': "Add",
+        'delete_btn': "Delete",
+        'portfolio_title': "💰 My Portfolio",
+        'portfolio_empty': "Your portfolio is currently empty.",
+        'add_stock_expander': "➕ Add New Stock",
+        'search_stock': "🔍 Search for an asset:",
+        'groq_help': "Paste your key starting with gsk_ here.",
+        'groq_warning': "⚠️ Provide a Groq key for AI analysis!",
+        'current_price': "Current Price:",
+        'period_radio': "Time Period:",
+        'historical_fig_labels': {'Close': 'Price (USD)', 'index': 'Date'},
+        'notification_subheader': "🔔 Set Notifications",
+        'news_and_analysis': "**News & Analysis**",
+        'request_news_toggle': "Request News",
+        'email_label': "Email for Alerts:",
+        'email_placeholder': "example@email.com",
+        'email_saved': "✅ Saved!",
+        'email_error': "❌ Invalid format!",
+        'lower_limit': "**Lower Limit (Stop-Loss)**",
+        'upper_limit': "**Upper Limit (Target Price)**",
+        'limit_placeholder': "USD value",
+        'toast_low': "🛑 beesett {low} USD alá!",
+        'toast_high': "💰 elérte a {high} USD-t!",
+        'chat_title': "💬 AI Financial Assistant",
+        'chat_init_msg': "Hi! I am your AI assistant. How can I help with {symbol}?",
+        'chat_input_placeholder': "Request AI opinion on {symbol}...",
+        'ai_spinner': "Analysis in progress...",
+        'system_prompt_base': "You are a professional financial assistant. User is analyzing {selected}. Current price is {current_price} USD.",
+        'ai_disclaimer': "⚠️ AI-generated analysis is for educational purposes only, not financial advice.",
+        'about_title': "ℹ️ About the App",
+        'about_intro': "Welcome to the Stock Watcher application!",
+        'about_goal_title': "🎯 App Purpose",
+        'about_goal_text': """
+            This software is a modern stock tracker and portfolio manager. Key features:
+            * Tracking real-time world market prices.
+            * Portfolio management, calculation of profit and loss.
+            * Setting smart news and price notifications.
+            * AI-powered analysis for rapid news and portfolio assessment.
+            """,
+        'about_ai_title': "🤖 Artificial Intelligence",
+        'about_ai_text': """
+            The app uses the blazing-fast **Groq AI** technology.
+            You need a free API key, which you can get in 2 minutes on the [Groq Console](https://console.groq.com/) website.
+            """,
+        'about_data_title': "🔒 Data Privacy",
+        'about_data_info': """
+            **We do not store any of your data on servers!**
+            
+            All your entered data is stored exclusively in your own browser's memory (LocalStorage).
+            
+            *💡 Important: If you use another browser or clear browsing data, you must re-enter your data!*
+            """,
+        'about_notif_title': "🔔 Notification System",
+        'about_notif_text': """
+            You can set custom rules for each stock. The app sends email notifications when:
+            * New, market-moving news appears about the company.
+            * The price reaches your **target price** (Upper limit).
+            * The price drops below your **risk level** (Lower limit).
+            """,
+        'about_disclaimer_title': "⚠️ LEGAL DISCLAIMER",
+        'about_disclaimer_text': """
+            AI-generated analysis, summaries, and Portfolio Assistant responses are **for informational purposes only**.
+            
+            The AI **is not a substitute for qualified financial professionals**, and the content **does not constitute investment or financial advice**.
+            """
+    }
+}
+
+
+localS = LocalStorage()
+
+# --- 1. WEBOLDAL BEÁLLÍTÁSAI ---
+st.set_page_config(page_title="Tőzsde Figyelő", page_icon="📈", layout="wide")
+
+st.markdown("""
+    <style>
+        [data-testid="stSidebarHeader"] {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0rem !important;
+            min-height: 2rem !important; 
+            height: 2rem !important; 
+        }
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 0rem !important;
+        }
+        [data-testid="stSidebarUserContent"] h1:first-of-type {
+            margin-top: -1.5rem !important;
+            padding-top: 0rem !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+API_KEY = "d7jq70pr01qnk4oceb20d7jq70pr01qnk4oceb2g"
+
+# Természetesen ide a saját, valódi Gemini API kulcsodat kell beírnod majd!
+GEMINI_API_KEY = "AIzaSyDpKsXMK2DqcA0awy2rnKd8qmPIk4veK90"
+genai.configure(api_key=GEMINI_API_KEY)
+
+# --- 2. SESSION STATE (Állapotok inicializálása) ---
+
+if 'language' not in st.session_state:
+    st.session_state.language = 'hu'
+
+# 1. LÉPÉS: Alapváltozók létrehozása
+if 'selected_stock' not in st.session_state:
+    st.session_state.selected_stock = "AAPL"
+if 'subscribed_news' not in st.session_state:
+    st.session_state.subscribed_news = set()
+if 'portfolio' not in st.session_state:
+    st.session_state.portfolio = []
+if 'favorites' not in st.session_state:
+    st.session_state.favorites = set()
+if 'user_email' not in st.session_state:
+    st.session_state.user_email = ""
+if 'price_alerts' not in st.session_state:
+    st.session_state.price_alerts = {}
+
+# 2. LÉPÉS: Adatok lekérése a böngésző memóriájából
+saved_portfolio = localS.getItem("stored_portfolio")
+saved_favorites = localS.getItem("stored_favorites")
+saved_email = localS.getItem("stored_email")
+saved_alerts = localS.getItem("stored_alerts")
+saved_news_subs = localS.getItem("stored_news_subs") # ÚJ: Hír feliratkozások
+
+# 3. LÉPÉS: Betöltés a memóriába (Csak legelső alkalommal)
+# 3. LÉPÉS: Betöltés a memóriába (Csak legelső alkalommal)
+if saved_portfolio and 'loaded_port' not in st.session_state:
+    st.session_state.portfolio = saved_portfolio
+    st.session_state.loaded_port = True
+
+if saved_favorites and 'loaded_fav' not in st.session_state:
+    st.session_state.favorites = set(saved_favorites)
+    st.session_state.loaded_fav = True
+
+# JAVÍTÁS ITT: "is not None" kell ide, nem csak "saved_news_subs"
+if saved_news_subs is not None and 'loaded_news' not in st.session_state:
+    st.session_state.subscribed_news = set(saved_news_subs)
+    st.session_state.loaded_news = True
+
+if saved_email and 'loaded_email' not in st.session_state:
+    st.session_state.user_email = saved_email
+    st.session_state.loaded_email = True
+
+# JAVÍTÁS ITT IS:
+if saved_alerts is not None and 'loaded_alerts' not in st.session_state:
+    st.session_state.price_alerts = saved_alerts
+    st.session_state.loaded_alerts = True
+
+# --- 3. FÜGGVÉNYEK DEFINIÁLÁSA ---
+@st.cache_data(ttl=3600)
+def search_stock(query):
+    if not query: return []
+    url = f"https://finnhub.io/api/v1/search?q={query}&token={API_KEY}"
+    try:
+        r = requests.get(url)
+        return r.json().get('result', [])[:5]
+    except: return []
+
+
+def get_market_sentiment():
+    """Lekéri az S&P 500 RSI-jét, ami jól mutatja a félelem/kapzsiság szintjét (0-100)"""
+    try:
+        spy = yf.Ticker("^GSPC")
+        hist = spy.history(period="1mo")
+        delta = hist['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1+rs))
+        return round(rsi.iloc[-1])
+    except:
+        return 50 # Középérték, ha hiba van
+
+
+def is_valid_email(email):
+    pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+    return re.match(pattern, email) is not None
+
+
+@st.cache_data(ttl=86400)
+def analyze_news_with_groq(title, summary, stock_symbol, api_key): # Új paraméter: summary
+    if not api_key:
+        return "❌ Kérlek, add meg a Groq API kulcsodat!"
+    
+    # Ha nincs összefoglaló, csak a címet használjuk
+    context = f"Cím: {title}\nÖsszefoglaló: {summary}" if summary else f"Cím: {title}"
+    
+    try:
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Te egy profi tőzsdei elemző vagy."},
+                {"role": "user", "content": f"Elemezd a(z) {stock_symbol} részvényt érintő hírt.\n\n{context}\n\nKérlek, adj egy rövid magyar nyelvű összefoglalót a várható hatásokról emojikkal."}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ Hiba: {str(e)}"
+
+@st.cache_data(ttl=3600)
+def get_stocks_from_screener(screener_type="trending"):
+    if screener_type == "trending":
+        url = "https://query1.finance.yahoo.com/v1/finance/trending/US"
+    else:
+        url = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=most_active&count=6"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        quotes = data['finance']['result'][0]['quotes']
+        return [q['symbol'] for q in quotes if '^' not in q['symbol'] and '=' not in q['symbol']][:6]
+    except:
+        return ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL"]
+
+@st.cache_data(ttl=60)
+def get_live_price(symbol):
+    try:
+        ticker = yf.Ticker(symbol)
+        
+        # 1. Lekérünk 2 napnyi adatot, hogy tudjunk viszonyítani a tegnapihoz
+        hist = ticker.history(period="2d")
+        
+        if not hist.empty:
+            # Az utolsó sor (mai nap) záróára
+            current_price = hist['Close'].iloc[-1]
+            
+            # 2. Változás kiszámítása (ha megvan a tegnapi adat is)
+            if len(hist) > 1:
+                prev_price = hist['Close'].iloc[-2]
+                change = current_price - prev_price
+            else:
+                # Kriptóknál vagy friss listázásnál előfordulhat, hogy csak 1 nap jön le
+                change = 0
+                
+            # 3. Visszaadjuk a 'c' (current) és 'd' (difference) értékeket a gomboknak
+            return {
+                'c': round(current_price, 2),
+                'd': round(change, 2)
+            }
+        return None
+    except Exception as e:
+        return None
+
+@st.cache_data(ttl=3600)
+def get_stock_details(symbol):
+    ticker = yf.Ticker(symbol)
+    return ticker.info
+
+@st.cache_data(ttl=3600)
+def get_historical_data(symbol, period):
+    ticker = yf.Ticker(symbol)
+    return ticker.history(period=period)
+
+@st.cache_data(ttl=1800) 
+def get_stock_news(symbol):
+    ticker = yf.Ticker(symbol)
+    return ticker.news
+
+def draw_stock_buttons(stock_list, key_prefix):
+    fetched_data = {}
+    
+    # 1. Párhuzamos letöltés (Multithreading)
+    # A max_workers=5 azt jelenti, hogy maximum 5 szálon kérjük le az adatokat egyszerre.
+    # Nem érdemes sokkal többre állítani, mert a Finnhub API blokkolhat a "támadás" miatt.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Elküldjük a kéréseket egyszerre a háttérben
+        future_to_sym = {executor.submit(get_live_price, sym): sym for sym in stock_list}
+        
+        # Ahogy megérkeznek a válaszok, elmentjük őket egy szótárba
+        for future in concurrent.futures.as_completed(future_to_sym):
+            sym = future_to_sym[future]
+            fetched_data[sym] = future.result()
+
+    # 2. Gombok kirajzolása az eredeti sorrendben
+    for symbol in stock_list:
+        data = fetched_data.get(symbol)
+        
+        if data == "RATE_LIMIT":
+            st.sidebar.error(f"⚠️ {symbol} blokkolva (Túl gyors lekérés!).")
+            continue
+        elif not data or not isinstance(data, dict) or not data.get('c'):
+            continue
+            
+        price = data['c']
+        change = data.get('d', 0)
+        arrow = "🟩 ⬆" if change > 0 else "🟥 ⬇" if change < 0 else "⬜ ➖"
+        
+        if st.sidebar.button(f"{symbol} | {price} USD {arrow}", key=f"{key_prefix}_{symbol}", use_container_width=True):
+            st.session_state.selected_stock = symbol
+            st.rerun()
+
+
+# ==========================================
+# --- 1.1 NYELVVÁLASZTÓ (Sidebar Teteje) ---
+# ==========================================
+# Két oszlopot csinálunk a bal oldali sávban, hogy a gombok egymás mellett legyenek
+lang_c1, lang_c2 = st.sidebar.columns(2)
+
+with lang_c1:
+    # A use_container_width=True miatt szépen kitöltik a rendelkezésre álló helyet
+    if st.button("🇭🇺 HU", use_container_width=True):
+        st.session_state.language = 'hu'
+        st.rerun()
+
+with lang_c2:
+    if st.button("🇺🇸 EN", use_container_width=True):
+        st.session_state.language = 'en'
+        st.rerun()
+
+st.sidebar.divider() # Egy vékony elválasztó vonal a gombok és a menü közé
+
+
+# --- 4. NAVIGÁCIÓ (FŐ ELÁGAZÁS) ---
+
+menu = st.sidebar.selectbox("Válassz menüpontot:", ["📈 Tőzsde Figyelő", "💰 Portfólióm","📚 Segédlet", "ℹ️ A programról"])
+st.sidebar.divider()
+
+# --- API KULCS BEKÉRÉSE GLOBÁLISAN ---
+with st.sidebar.expander("🔑 AI Beállítások (Ingyenes)"):
+        st.markdown("Kérj egy ingyenes kulcsot a [Groq Console](https://console.groq.com/)-ban!")
+        
+        saved_key = localS.getItem("stored_groq_key")
+        if 'groq_api_key' not in st.session_state:
+            st.session_state.groq_api_key = saved_key if saved_key else ""
+            
+        current_input = st.text_input(
+            "Groq API Key:", 
+            value=st.session_state.groq_api_key, 
+            type="password", 
+            help="A böngésződ biztonságosan megjegyzi a kulcsot!"
+        )
+        
+        if current_input != st.session_state.groq_api_key:
+            st.session_state.groq_api_key = current_input
+            localS.setItem("stored_groq_key", current_input)
+            
+        user_api_key = current_input
+
+        if not user_api_key:
+            st.warning("⚠️ Adj meg egy Groq kulcsot az AI elemzésekhez!")
+
+if menu == "💰 Portfólióm":
+    # ==========================================
+    # PORTFÓLIÓ OLDAL (Minden diagrammal)
+    # ==========================================
+    st.title("💰 Saját Portfólióm")
+
+    with st.expander("➕ Új részvény hozzáadása", expanded=True):
+        
+        st.write("Keress rá a cég nevére vagy kódjára, majd add meg a vásárlás részleteit!")
+        
+        search_q = st.text_input(
+            "🔍 Keresés (pl. Apple, Tesla, NVDA):", 
+            key="port_search",
+            help="Nem találod a részvényt, amit keresel? Győződj meg róla, hogy helyesen gépelted be az azonosítót! Ha európai papírt keresel, próbáld a kód végére tenni a '.DE' (német) vagy '.AS' (holland) végződést. Ellenőrizd a pontos kódot a finance.yahoo.com oldalon!"
+        )
+                
+        selected_ticker = None
+        
+        # 2. Dinamikus találati lista és kiválasztás
+        # 2. Dinamikus találati lista és kiválasztás
+        if search_q:
+            results = search_stock(search_q)
+            
+            # Adjuk hozzá a manuálisan beírt szöveget is opcióként (Kriptók és Indexek miatt!)
+            options = [f"{search_q.upper()} (Közvetlen megadás)"]
+            
+            if results:
+                options += [f"{r['symbol']} ({r['description']})" for r in results]
+                
+            chosen = st.selectbox("Válaszd ki a pontos eszközt:", options, key="port_select")
+            
+            # Kinyerjük csak a kódot
+            selected_ticker = chosen.split(" ")[0]
+        
+        st.divider()
+        
+        # 3. Vásárlási adatok megadása
+        st.write("### 💵 Vásárlás részletei")
+        
+        # Felhasználóbarát választó
+        input_type = st.radio("Hogyan szeretnéd megadni az árat?", ["Teljes kifizetett összeg (Befektetés)", "1 db részvény ára (Darabár)"], horizontal=True)
+        
+        col1, col2 = st.columns(2)
+        # Itt levettük a min_value-t 0.0001-re, hogy a nagyon apró törtrészvényeket (vagy kriptót) is kezelje!
+        new_qty = col2.number_input("Vásárolt mennyiség (db):", min_value=0.0001, step=0.01, format="%.4f")
+        
+        if input_type == "Teljes kifizetett összeg (Befektetés)":
+            total_cost = col1.number_input("Összesen fizetett összeg (USD):", min_value=0.0, step=1.0)
+            # Kiszámoljuk a darabárat a memóriának (Total / Mennyiség)
+            actual_buy_price = (total_cost / new_qty) if new_qty > 0 else 0
+            if total_cost > 0 and new_qty > 0:
+                st.info(f"💡 **A rendszer által kiszámolt darabár:** {actual_buy_price:.2f} USD / db")
+        else:
+            actual_buy_price = col1.number_input("1 db ára vásárláskor (USD):", min_value=0.0, step=0.1)
+            total_cost = actual_buy_price * new_qty
+            if actual_buy_price > 0 and new_qty > 0:
+                st.info(f"💡 **Összesen befektetett összeg:** {total_cost:.2f} USD")
+
+        # 4. Mentés gomb (Itt a new_price helyett az actual_buy_price-t mentjük!)
+        if st.button("Hozzáadás a portfólióhoz", use_container_width=True):
+            if selected_ticker and new_qty > 0 and actual_buy_price > 0:
+                with st.spinner("Ellenőrzés a piacon..."):
+                    test_ticker = yf.Ticker(selected_ticker)
+                    test_hist = test_ticker.history(period="1d")
+                    if test_hist.empty:
+                        st.error(f"❌ Érvénytelen kód: '{selected_ticker}'.")
+                    else:
+                        st.session_state.portfolio.append({
+                            'symbol': selected_ticker, 
+                            'buy_price': actual_buy_price, # <-- JAVÍTVA
+                            'qty': new_qty
+                        })
+                        localS.setItem("stored_portfolio", st.session_state.portfolio)
+                        st.success(f"✅ {selected_ticker} sikeresen hozzáadva!")
+                        time.sleep(1)
+                        st.rerun()
+            elif not selected_ticker:
+                st.error("Kérlek előbb keress rá és válassz ki egy részvényt!")
+            else:
+                st.warning("A mennyiségnek és az árnak is nagyobbnak kell lennie, mint 0!")
+
+        # --- RÉSZVÉNY ELADÁSA / ELTÁVOLÍTÁSA ---
+    with st.expander("➖ Részvény eladása (Teljes vagy részleges)"):
+        if not st.session_state.portfolio:
+            st.write("Nincs eladható részvényed.")
+        else:
+            # 1. Kiválasztjuk, melyiket akarjuk eladni
+            stock_options = [f"{i}: {item['symbol']} ({item['qty']} db)" for i, item in enumerate(st.session_state.portfolio)]
+            selected_to_sell = st.selectbox("Melyik részvényből adsz el?", stock_options)
+            
+            # Kinyerjük az indexet a szövegből
+            idx = int(selected_to_sell.split(":")[0])
+            current_item = st.session_state.portfolio[idx]
+            
+            col_s1, col_s2 = st.columns(2)
+            sell_qty = col_s1.number_input("Eladni kívánt mennyiség:", min_value=0.01, max_value=float(current_item['qty']), step=1.0)
+            sell_price = col_s2.number_input("Eladási ár (USD):", min_value=0.0, value=float(current_item['buy_price']))
+
+            if st.button("Eladás végrehajtása", use_container_width=True, type="primary"):
+                # Számolunk egy gyors profitot az eladásra
+                profit = (sell_price - current_item['buy_price']) * sell_qty
+                
+                if sell_qty < current_item['qty']:
+                    # Részleges eladás: csak csökkentjük a darabszámot
+                    st.session_state.portfolio[idx]['qty'] -= sell_qty
+                    st.toast(f"Eladva {sell_qty} db {current_item['symbol']}. Profit: {profit:.2f} USD", icon="💰")
+                else:
+                    # Teljes eladás: töröljük a listából
+                    st.session_state.portfolio.pop(idx)
+                    localS.setItem("stored_portfolio", st.session_state.portfolio)
+                    st.toast(f"A teljes {current_item['symbol']} pozíció lezárva. Profit: {profit:.2f} USD", icon="✅")
+                
+                time.sleep(1)
+                st.rerun()
+
+    if not st.session_state.portfolio:
+        st.info("Még nincs semmi a portfóliódban. Add meg az első vételedet fentebb!")
+    else:
+       # --- ADATOK ÖSSZEGYŰJTÉSE ÉS DEVIZAVÁLTÁS (OSZTALÉKKAL) ---
+        portfolio_data = []
+        total_invested_usd = 0
+        current_total_value_usd = 0
+        total_annual_dividend_usd = 0  # <--- ÚJ: Ebben gyűjtjük az összes osztalékot
+        
+        # Lekérjük az aktuális EUR/USD árfolyamot
+        try:
+            eur_usd_rate = yf.Ticker("EURUSD=X").history(period="1d")['Close'].iloc[-1]
+        except:
+            eur_usd_rate = 1.08
+        
+        for item in st.session_state.portfolio:
+            ticker = yf.Ticker(item['symbol'])
+            hist = ticker.history(period="1d")
+            info = ticker.info
+            
+            currency = info.get('currency', 'USD')
+            current_price = hist['Close'].iloc[-1] if not hist.empty else item['buy_price']
+            sector = info.get('sector', 'Egyéb')
+            
+            # --- OSZTALÉK SZÁMÍTÁSA JAVÍTVA ---
+            div_yield = info.get('dividendYield', 0)
+            if div_yield is None: div_yield = 0
+            
+            # JAVÍTÁS: Ha a szám nagyobb, mint 0.2 (azaz 20%), akkor valószínűleg 
+            # százalékban adta meg az API (pl. 0.7 a 0.7% helyett), tehát osztani kell 100-zal.
+            # A legtöbb részvény nem fizet 20% felett.
+            if div_yield > 0.2:
+                div_yield = div_yield / 100
+            
+            # Éves osztalék a natív devizában
+            annual_div_native = (current_price * item['qty']) * div_yield
+            # ----------------------------------
+            # --------------------------
+
+            invested_native = item['buy_price'] * item['qty']
+            current_value_native = current_price * item['qty']
+            p_l_native = current_value_native - invested_native
+            
+            # Átváltás USD-re
+            if currency == 'EUR':
+                invested_usd = invested_native * eur_usd_rate
+                current_value_usd = current_value_native * eur_usd_rate
+                annual_div_usd = annual_div_native * eur_usd_rate # <--- Átváltott osztalék
+            else:
+                invested_usd = invested_native
+                current_value_usd = current_value_native
+                annual_div_usd = annual_div_native
+                
+            total_invested_usd += invested_usd
+            current_total_value_usd += current_value_usd
+            total_annual_dividend_usd += annual_div_usd # <--- Hozzáadás az összesített kasszához
+            
+            portfolio_data.append({
+                'Részvény': item['symbol'],
+                'Deviza': currency,
+                'Befektetve': invested_native,
+                'Jelenlegi Érték': current_value_native,
+                'Profit/Veszteség': p_l_native,
+                'Szektor': sector,
+                'Osztalék (Éves)': annual_div_native, # <--- Beletesszük a táblázatba is
+                'Jelenlegi Érték (USD)': current_value_usd, 
+                'Befektetve (USD)': invested_usd
+            })
+
+        df_portfolio = pd.DataFrame(portfolio_data)
+
+        df_portfolio = pd.DataFrame(portfolio_data)
+
+        # --- 1. ÖSSZESÍTŐ METRIKÁK (Javítva) ---
+        p_l_total = current_total_value_usd - total_invested_usd
+        p_l_percent = (p_l_total / total_invested_usd) * 100 if total_invested_usd > 0 else 0
+
+        # --- 1. ÖSSZESÍTŐ METRIKÁK ---
+        c1, c2, c3, c4 = st.columns(4) # 3 helyett 4 oszlop
+        c1.metric("Befektetés", f"{total_invested_usd:.2f} $")
+        c2.metric("Jelenlegi érték", f"{current_total_value_usd:.2f} $")
+        c3.metric("Profit/Veszteség", f"{p_l_total:.2f} $", f"{p_l_percent:.2f}%")
+        c4.metric("Várható éves osztalék", f"{total_annual_dividend_usd:.2f} $")
+
+        st.divider()
+
+        # --- DIVERZIFIKÁCIÓ ELLENŐRZÉSE ---
+        all_sectors = [
+            "Information Technology", "Health Care", "Financials", "Consumer Discretionary", 
+            "Communication Services", "Industrials", "Consumer Staples", "Energy", 
+            "Utilities", "Real Estate", "Materials"
+        ]
+
+        # Kiszámoljuk, melyik szektor hány százalékot tesz ki
+        sector_distribution = df_portfolio.groupby('Szektor')['Jelenlegi Érték (USD)'].sum() / current_total_value_usd  
+
+        # 1. Túlkoncentráció figyelmeztetés (60% felett)
+        for sector, weight in sector_distribution.items():
+            if weight > 0.6:
+                st.warning(f"⚠️ **A portfólió nem elég diverzifikált!** Túl nagy része ({weight:.1%}) a(z) **{sector}** szektorból származik.")
+
+        # 2. Hiányzó szektorok figyelmeztetés
+        portfolio_sectors = df_portfolio['Szektor'].unique()
+        missing_sectors = [s for s in all_sectors if s not in portfolio_sectors]
+
+        if len(missing_sectors) > 5: # Ha például a szektorok több mint fele hiányzik
+            st.warning(f"⚠️ **Vigyázat!** A portfólióból számos kulcsfontosságú szektor hiányzik (pl. {', '.join(missing_sectors[:3])}).")
+
+
+        # --- 2. A 2 DB KÖRDIAGRAM (Kért funkció) ---
+        col_pie1, col_pie2 = st.columns(2)
+        
+        with col_pie1:
+            st.write("### 🥧 Részvények eloszlása")
+            fig_stock = px.pie(df_portfolio, values='Jelenlegi Érték (USD)', names='Részvény', hole=0.4)
+            fig_stock.update_traces(textinfo='percent+label')
+            st.plotly_chart(fig_stock, use_container_width=True)
+            
+        with col_pie2:
+            st.write("### 🏢 Szektorok szerinti részesedés")
+            # Szektorok szerinti aggregálás a kördiagramhoz
+            fig_sector = px.pie(df_portfolio, values='Jelenlegi Érték (USD)', names='Szektor', hole=0.4)
+            fig_sector.update_traces(textinfo='percent+label')
+            st.plotly_chart(fig_sector, use_container_width=True)
+
+        st.divider()
+
+        
+
+        # --- 3. OSZLOPDIAGRAM (Javítva) ---
+        st.write("### 📊 Portfólió Teljesítménye (Összesített és Részvényenként)")
+
+        
+        # Létrehozzuk az "Összesen" sort az új változókkal
+        df_total = pd.DataFrame({
+            'Részvény': ['📊 ÖSSZESEN'],
+            'Befektetve (USD)': [total_invested_usd],
+            'Jelenlegi Érték (USD)': [current_total_value_usd],
+            'Szektor': ['Összesített']
+        })
+
+        # Összefűzzük a részvényenkénti USD adatokkal
+        df_plot = pd.concat([df_total, df_portfolio.sort_values('Jelenlegi Érték (USD)', ascending=False)], ignore_index=True)
+
+        # Az adatok "melt"-elése a csoporthoz (Marad a régi logika, de az USD oszlopokkal)
+        df_melted = df_plot.melt(
+            id_vars='Részvény', 
+            value_vars=['Befektetve (USD)', 'Jelenlegi Érték (USD)'], 
+            var_name='Típus', 
+            value_name='Összeg (USD)'
+        )
+
+        fig_bar = px.bar(
+            df_melted, 
+            x='Részvény', 
+            y='Összeg (USD)', 
+            color='Típus', 
+            barmode='group',
+            color_discrete_map={'Befektetve (USD)': '#6c757d', 'Jelenlegi Érték (USD)': '#28a745'},
+            # Itt a titok: a '.2f' jelentése: fixen 2 tizedesjegy (float)
+            text_auto='.2f' 
+        )
+
+        # TÁVOLSÁGOK ÉS STÍLUS BEÁLLÍTÁSA
+        fig_bar.update_layout(
+            bargap=0.35,
+            bargroupgap=0.1,
+            xaxis={'fixedrange': True}, 
+            yaxis={'fixedrange': True}, 
+            dragmode=False,
+            # Beállítjuk, hogy a feliratok az oszlopokon belül/felett jól látszódjanak
+            uniformtext_minsize=8, 
+            uniformtext_mode='hide',
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+
+        # Figyelem: A kódodban kétszer szerepelt a plotly_chart hívás, 
+        # elég csak egyszer, a config-os verziót meghagyni!
+        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
+
+        # --- 4. RÉSZLETES TÁBLÁZAT ---
+        # --- 4. RÉSZLETES TÁBLÁZAT ---
+        with st.expander("📝 Részletes adatok táblázata (Eredeti devizában)"):
+            # Csak a látható oszlopokat mutatjuk (a rejtett USD oszlopokat nem)
+            display_columns = ['Részvény', 'Deviza', 'Befektetve', 'Jelenlegi Érték', 'Profit/Veszteség', 'Szektor']
+            st.dataframe(df_portfolio[display_columns].style.format({
+                'Befektetve': '{:.2f}', 
+                'Jelenlegi Érték': '{:.2f}', 
+                'Profit/Veszteség': '{:.2f}'
+            }), use_container_width=True)
+
+
+        with st.expander("💰 Részletes Osztalék Elemzés"):
+            st.write("Az alábbi összegek éves becsült kifizetések a saját devizájukban:")
+            
+            # Csak azokat mutatjuk, ahol van értelmezhető osztalék (0-nál nagyobb)
+            # Ha látni akarod a nullásokat is, vedd ki a query-t
+            df_div_display = df_portfolio[['Részvény', 'Deviza', 'Osztalék (Éves)', 'Szektor']]
+            
+            # Formázott táblázat megjelenítése
+            st.dataframe(df_div_display.style.format({
+                'Osztalék (Éves)': '{:.2f}'
+            }), use_container_width=True, hide_index=True)
+            
+            # Egy kis magyarázat a végére
+            st.caption("Megjegyzés: Az 'Accumulating' (visszaforgató) ETF-ek (mint a VUAA) 0.00 értéket mutatnak, mivel nem fizetnek készpénzt.")
+
+        if total_annual_dividend_usd > 0:
+                st.write("### 🏆 Legnagyobb osztalékfizetőid")
+                # Oszlopdiagram az osztalékokról
+                fig_div = px.bar(
+                    df_portfolio[df_portfolio['Osztalék (Éves)'] > 0], 
+                    x='Részvény', 
+                    y='Osztalék (Éves)',
+                    color='Részvény',
+                    text_auto='.2f',
+                    title="Éves Osztalék Részvényenként (Eredeti devizában)"
+                )
+                st.plotly_chart(fig_div, use_container_width=True, key="div_bar_chart")
+
+        
+        # ==========================================
+        # --- AI PORTFÓLIÓ ELEMZŐ CHATBOX ---
+        # ==========================================
+        st.divider()
+        st.subheader("🤖 Portfólió Menedzser Asszisztens")
+        st.info("Kérdezz rá a portfóliódra! Pl.: 'Mennyire kockázatos ez az összeállítás?' vagy 'Milyen szektort javasolsz még hozzáadni?'")
+
+        # Külön chat memória csak a portfólióhoz
+        port_chat_key = "messages_portfolio_main"
+        if port_chat_key not in st.session_state:
+            st.session_state[port_chat_key] = [{"role": "assistant", "content": "Szia! Én vagyok az AI Portfólió Menedzsered. Átnéztem a fenti adataidat. Miben segíthetek a portfólióddal kapcsolatban?"}]
+
+        # Chat ablak kirajzolása
+        port_chat_container = st.container(height=400, border=True)
+        with port_chat_container:
+            for message in st.session_state[port_chat_key]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+        if prompt := st.chat_input("Kérj véleményt a portfóliódról..."):
+            st.session_state[port_chat_key].append({"role": "user", "content": prompt})
+            
+            with port_chat_container:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                    
+            with port_chat_container:
+                with st.chat_message("assistant"):
+                    if not user_api_key:
+                        st.error("❌ Kérlek, add meg a Groq API kulcsodat a bal oldali sávban a chateléshez!")
+                    else:
+                        with st.spinner("Portfólió elemzése folyamatban..."):
+                            try:
+                                # 1. A Jelenlegi Portfólió Szöveggé alakítása az AI-nak
+                                portfolio_context = ""
+                                for p_item in portfolio_data:
+                                    portfolio_context += f"- {p_item['Részvény']}: {p_item['Jelenlegi Érték (USD)']:.2f} USD érték ({p_item['Szektor']} szektor)\n"
+                                
+                                # 2. Az Utasítás (System Prompt) felépítése
+                                system_prompt = {
+                                    "role": "system", 
+                                    "content": f"""Te egy profi magyar pénzügyi elemző és portfólió menedzser vagy. 
+                                    A felhasználó jelenlegi portfóliója így néz ki:
+                                    Összesített érték: {current_total_value_usd:.2f} USD.
+                                    Tartalom:
+                                    {portfolio_context}
+                                    
+                                    Kérlek, válaszolj a felhasználó kérdéseire a portfóliójával kapcsolatban. 
+                                    Adj építő kritikát a diverzifikációról, szektor-koncentrációról és lehetséges kockázatokról. 
+                                    Legyél tárgyilagos, és emeld ki, ha valami túl kockázatos. 
+                                    Ne adj direkt befektetési tanácsot, de javasolhatsz elemzésre érdemes iparágakat."""
+                                }
+
+                                client = OpenAI(api_key=user_api_key, base_url="https://api.groq.com/openai/v1")
+                                
+                                # 3. Üzenetek küldése
+                                api_messages = [system_prompt] + st.session_state[port_chat_key]
+                                
+                                response = client.chat.completions.create(
+                                    model="llama-3.3-70b-versatile",
+                                    messages=api_messages,
+                                    max_tokens=1024
+                                )
+                                
+                                ai_response = response.choices[0].message.content
+                                
+                                st.markdown(ai_response)
+                                st.session_state[port_chat_key].append({"role": "assistant", "content": ai_response})
+                                
+                            except Exception as e:
+                                st.error(f"⚠️ Hálózati vagy API hiba: {str(e)}")
+
+
+        # --- 5. GYORSJELENTÉSI NAPTÁR (EARNINGS CALENDAR) ---
+        st.divider()
+        st.header("📅 Közelgő Gyorsjelentések")
+        st.write("A portfóliódban és a kedvenceid között szereplő cégek következő negyedéves jelentései.")
+
+        # Összegyűjtjük az összes ticker-t: portfólió + kedvencek
+        # Feltételezzük, hogy a kedvencek a st.session_state.favorites-ben vannak
+        tracked_tickers = set([item['symbol'] for item in st.session_state.portfolio])
+        if 'favorites' in st.session_state:
+            tracked_tickers.update(st.session_state.favorites)
+
+        earnings_data = []
+
+        if tracked_tickers:
+            with st.spinner('Naptár frissítése...'):
+                for symbol in tracked_tickers:
+                    try:
+                        ticker = yf.Ticker(symbol)
+                        calendar = ticker.calendar
+                        
+                        # A yfinance 'Earnings Date' néven adja vissza a dátumot (lista formátumban)
+                        if calendar is not None and 'Earnings Date' in calendar:
+                            next_report = calendar['Earnings Date'][0]
+                            # Formázzuk a dátumot olvashatóbbra
+                            date_str = next_report.strftime('%Y-%m-%d')
+                            
+                            earnings_data.append({
+                                "Részvény": symbol,
+                                "Jelentés Dátuma": date_str,
+                                "Típus": "Portfólió" if any(item['symbol'] == symbol for item in st.session_state.portfolio) else "Kedvenc"
+                            })
+                    except:
+                        continue # Ha egy tickerhez nincs adat (pl. kripto), kihagyjuk
+
+            if earnings_data:
+                # Időrendbe rakjuk, hogy a legközelebbi legyen legfelül
+                df_earnings = pd.DataFrame(earnings_data).sort_values(by="Jelentés Dátuma")
+                
+                # Megjelenítés egy szép táblázatban
+                st.dataframe(df_earnings, use_container_width=True, hide_index=True)
+                
+                st.info("💡 **Miért fontos ez?** A jelentés napján az árfolyam gyakran jelentősen elmozdul a várakozásoktól függően.")
+            else:
+                st.info("Jelenleg nincs elérhető jelentési dátum a követett papírokhoz.")
+        else:
+            st.warning("Még nincsenek részvények a portfóliódban vagy a kedvenceid között.")
+    
+
+    st.divider()
+    st.subheader("💾 Adatok mentése és betöltése")
+        
+    col_exp, col_imp = st.columns(2)
+
+    with col_exp:
+            st.write("**Exportálás**")
+            # Összeállítjuk a TELJES mentendő csomagot
+            export_data = {
+                "portfolio": st.session_state.portfolio,
+                "favorites": list(st.session_state.favorites),
+                "settings": {
+                    "email": st.session_state.get('user_email', ''),
+                    "groq_key": st.session_state.get('groq_api_key', ''),
+                    "notifications": st.session_state.get('notification_prefs', {}) 
+                    # Megjegyzés: a notification_prefs-t úgy mentsd, ahogy a pipákat kezeled
+                }
+            }
+            json_string = json.dumps(export_data, indent=4)
+            
+            st.download_button(
+                label="📥 Teljes mentés letöltése (JSON)",
+                data=json_string,
+                file_name="stockwatcher_full_backup.json",
+                mime="application/json",
+                help="Menti a portfóliót, a kedvenceket, az API kulcsot és a beállításokat is."
+            )
+
+    with col_imp:
+            st.write("**Importálás**")
+            uploaded_file = st.file_uploader("Biztonsági mentés visszatöltése", type=["json"])
+            
+            if uploaded_file is not None:
+                try:
+                    import_data = json.load(uploaded_file)
+                    
+                    if st.button("🔄 Minden adat felülírása és betöltése"):
+                        # 1. Alapadatok visszatöltése
+                        st.session_state.portfolio = import_data.get("portfolio", [])
+                        st.session_state.favorites = set(import_data.get("favorites", []))
+                        
+                        # 2. Beállítások visszatöltése
+                        settings = import_data.get("settings", {})
+                        st.session_state.user_email = settings.get("email", "")
+                        st.session_state.groq_api_key = settings.get("groq_key", "")
+                        st.session_state.notification_prefs = settings.get("notifications", {})
+
+                        # 3. Mentés a böngésző LocalStorage-ébe is, hogy frissítés után is megmaradjon
+                        if 'localS' in globals():
+                            localS.setItem("stored_portfolio", st.session_state.portfolio)
+                            localS.setItem("stored_favorites", list(st.session_state.favorites))
+                            localS.setItem("user_email", st.session_state.user_email)
+                            localS.setItem("groq_api_key", st.session_state.groq_api_key)
+                            # Az értesítéseket is elmentheted ide...
+
+                        st.success("✅ Minden beállítás és adat sikeresen betöltve!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Hiba a fájl feldolgozása közben: {e}")
+
+    
+
+elif menu == "ℹ️ A programról":
+    # ==========================================
+    # A PROGRAMRÓL OLDAL
+    # ==========================================
+    st.title("ℹ️ A programról")
+    st.write("Üdvözlünk a Tőzsde Figyelő alkalmazásban! Ez a felület azért jött létre, hogy egyszerűbbé, átláthatóbbá és okosabbá tegye a befektetéseid kezelését.")
+    
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 A program célja")
+        st.write("""
+        Ez a szoftver egy modern részvénykövető és portfóliómenedzser alkalmazás. Legfőbb funkciói:
+        * **Valós idejű árfolyamok:** Kövesd nyomon a világpiaci részvények aktuális helyzetét.
+        * **Portfólió kezelés:** Vezesd a saját befektetéseidet, és lásd azonnal a nyereséget vagy veszteséget.
+        * **Okos értesítések:** Kapj azonnali jelzést, ha a piac mozgásba lendül.
+        * **AI alapú piacelemzés:** Használd a mesterséges intelligenciát a hírek és a portfóliód gyors értékelésére.
+        """)
+
+        st.subheader("🤖 Mesterséges Intelligencia")
+        st.write("""
+        A program a villámgyors **Groq AI** technológiát használja az elemzésekhez és a chat asszisztenshez. 
+        Ennek használatához egy saját, ingyenes API kulcsra van szükséged, amelyet mindössze 2 perc alatt igényelhetsz a [Groq Console](https://console.groq.com/) weboldalán.
+        """)
+
+    with col2:
+        st.subheader("🔒 Adatvédelem és Adatkezelés")
+        st.info("""
+        **Semmilyen adatot nem tárolunk rólad szervereken!**
+        
+        Minden megadott adatod (a portfóliód, az e-mail címed, az API kulcsod és az értesítési limitjeid) kizárólag a **te saját böngésződ memóriájában** (LocalStorage) tárolódik.
+        
+        *💡 Fontos: Ha egy másik számítógépről, másik böngészőből nyitod meg az oldalt, vagy törlöd a böngészési adatokat, a beállításaidat újra meg kell adnod!*
+        """)
+
+        st.subheader("🔔 Értesítési rendszer")
+        st.write("""
+        Minden egyes részvényhez egyedi szabályokat állíthatsz be. A program e-mailen keresztül képes értesíteni téged, ha:
+        * Új, piacmozgató hír jelenik meg a kiválasztott cégről.
+        * Az árfolyam eléri az általad beállított **célárat** (Felső limit).
+        * Az árfolyam beesik a **kockázati szinted** alá (Alsó limit / Stop-Loss).
+        """)
+
+    st.divider()
+
+    # Jogi nyilatkozat kiemelve a lap alján
+    st.warning("""
+    **⚠️ JOGI NYILATKOZAT / DISCLAIMER**
+    
+    A beépített Mesterséges Intelligencia (AI) által készített elemzések, összefoglalók és a Portfólió Asszisztens válaszai **kizárólag tájékoztató és edukációs jellegűek**. 
+    
+    Az AI **nem helyettesíti a képesített pénzügyi szakembereket**, és az általa generált tartalom **semmilyen formában nem minősül befektetési, pénzügyi vagy adóügyi tanácsadásnak**. A tőzsdei befektetések kockázattal járnak, a döntéseket minden esetben saját felelősségedre, alapos tájékozódás után hozd meg!
+    """)
+
+elif menu == "📚 Segédlet":
+        st.title("📚 Befektetési Kisokos")
+        st.write("Ezen az oldalon összegyűjtöttük a legfontosabb fogalmakat, hogy magabiztosabban mozoghass a tőzsdén.")
+
+        # --- ALAPFOGALMAK ---
+        st.header("🔍 Alapfogalmak")
+        
+        with st.expander("🏢 Mi az a részvény?", expanded=True):
+            st.write("""
+            A részvény egy vállalat tulajdonjogának egy darabkája. Ha részvényt veszel, tulajdonos leszel a cégben.
+            * **Előnye:** Ha a cég jól megy, nő az árfolyam és osztalékot is kaphatsz.
+            * **Veszélye:** Ha a cég csődbe megy, a befektetésed értéke nullára is eshet.
+            """)
+
+        with st.expander("📦 Mi az az ETF?"):
+            st.write("""
+            **Exchange Traded Fund (Tőzsdén Kereskedett Alap).** Képzelj el egy kosarat, amiben több száz cég részvénye van benne.
+            * **Előnye:** Diverzifikáció (megosztod a kockázatot). Nem egy cégtől függsz, hanem egy egész piactól (pl. S&P 500).
+            * **Veszélye:** Piaci visszaesés esetén az egész kosár értéke csökken.
+            """)
+
+        with st.expander("📊 Mi az a P/E ráta?"):
+            st.write("""
+            **Price-to-Earnings (Árfolyam/Nyereség).** Azt mutatja meg, hogy a cég aktuális ára hányszorosa az egy év alatt megtermelt profitjának.
+            * **Alacsony (pl. 10-15):** A részvény olcsónak tűnhet (vagy bajban van a cég).
+            * **Magas (pl. 50+):** A befektetők nagy növekedést várnak (vagy túlárazott a papír).
+            """)
+
+        with st.expander("🪙 Mi az a Kriptovaluta?"):
+            st.write("""
+            Digitális fizetőeszközök (pl. Bitcoin, Ethereum), amik mögött nem áll bank vagy állam.
+            * **Előnye:** Hatalmas emelkedési potenciál, 24/7 kereskedés.
+            * **Veszélye:** **Extrém volatilitás** (akár egy nap alatt 20-30%-ot eshet), nincs rájuk garancia.
+            """)
+
+        st.divider()
+
+        # --- PORTFÓLIÓ PÉLDÁK ---
+        st.header("🥧 Mintaportfóliók")
+        st.write("A kockázattűrő képességed alapján különböző módon oszthatod meg a pénzed.")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.subheader("🛡️ Konzervatív")
+            st.caption("Biztonságra törekvő")
+            data = {'Kategória': ['Állampapír/Készpénz', 'S&P 500 ETF', 'Osztalékos részvény'], 'Arány': [60, 30, 10]}
+            fig = px.pie(data, values='Arány', names='Kategória', hole=0.3, color_discrete_sequence=['#2ecc71', '#27ae60', '#16a085'])
+            st.plotly_chart(fig, use_container_width=True, key="p_cons")
+            st.write("Alacsony kockázat, mérsékelt hozam.")
+
+        with col2:
+            st.subheader("⚖️ Kiegyensúlyozott")
+            st.caption("Növekedés + Biztonság")
+            data = {'Kategória': ['S&P 500 ETF', 'Egyedi részvények', 'Készpénz', 'Nasdaq 100'], 'Arány': [40, 30, 15, 15]}
+            fig = px.pie(data, values='Arány', names='Kategória', hole=0.3, color_discrete_sequence=['#3498db', '#2980b9', '#34495e', '#5dade2'])
+            st.plotly_chart(fig, use_container_width=True, key="p_bal")
+            st.write("Hosszú távú vagyonépítésre.")
+
+        with col3:
+            st.subheader("🚀 Kockázatos")
+            st.caption("Maximális hozamra várva")
+            data = {'Kategória': ['Kripto', 'Növekedési részvények', 'Opciók/Egyéb'], 'Arány': [40, 50, 10]}
+            fig = px.pie(data, values='Arány', names='Kategória', hole=0.3, color_discrete_sequence=['#e74c3c', '#c0392b', '#922b21'])
+            st.plotly_chart(fig, use_container_width=True, key="p_aggr")
+            st.write("Nagy hozam reménye, de nagy veszteség lehetősége.")
+
+        st.info("💡 **Tipp:** A legtöbb szakértő szerint a kezdőknek érdemes a portfóliójuk legalább 70-80%-át alacsony költségű ETF-ekben (pl. S&P 500 vagy World ETF) tartani.")
+
+else:
+    # ==========================================
+    # TŐZSDE FIGYELŐ OLDAL (DASHBOARD)
+    # ==========================================
+    st.sidebar.header("📈 Tőzsde Központ")
+    # --- BAL OLDALI SÁV (Kereső és listák) ---
+    st.sidebar.subheader("🔍 Keresés")
+    search_query = st.sidebar.text_input("Írd be a nevet vagy kódot:", key="search_bar")
+    if search_query:
+        results = search_stock(search_query)
+        for res in results:
+            if st.sidebar.button(f"{res['symbol']} ({res['description']})", key=f"search_{res['symbol']}", use_container_width=True):
+                st.session_state.selected_stock = res['symbol']
+                st.rerun()
+
+    st.sidebar.divider()
+
+    if st.session_state.favorites:
+        st.sidebar.subheader("⭐ Kedvencek")
+        draw_stock_buttons(list(st.session_state.favorites), "fav")
+        st.sidebar.divider()
+
+    trending_list = get_stocks_from_screener("trending")
+    popular_list = get_stocks_from_screener("most_active")
+
+    st.sidebar.subheader("🔥 Trending")
+    draw_stock_buttons(trending_list, "trend")
+
+    st.sidebar.divider()
+    st.sidebar.subheader("🌟 Népszerű")
+    draw_stock_buttons(popular_list, "pop")
+
+    # --- FŐOLDAL ---
+    selected = st.session_state.selected_stock
+    info = get_stock_details(selected)
+    company_name = info.get('longName', selected)
+
+    # 1. ELŐBB A FÜGGVÉNY (Callback)
+    def toggle_favorite():
+        # Megnézzük a négyzet aktuális állapotát a session_state-ben
+        if st.session_state[f"check_{selected}"]:
+            st.session_state.favorites.add(selected)
+        else:
+            st.session_state.favorites.discard(selected)
+        
+        # Mentés a böngészőbe (ha van localS definiálva)
+        if 'localS' in globals():
+            localS.setItem("stored_favorites", list(st.session_state.favorites))
+
+    # 2. A FEJLÉC ELRENDEZÉSE EGY SORBAN
+    col_title, col_fav, col_sentiment = st.columns([0.5, 0.2, 0.3])
+
+    with col_title:
+        st.title(f"📊 {selected}")
+        st.caption(company_name) # Így szebb, a név a kód alatt van kicsiben
+
+    with col_fav:
+        st.write("###") # Egy kis térköz, hogy a checkbox egy vonalba kerüljön a szöveggel
+        is_fav = selected in st.session_state.favorites
+        st.checkbox(
+            "⭐ Kedvenc", 
+            value=is_fav, 
+            key=f"check_{selected}", 
+            on_change=toggle_favorite
+        )
+
+    with col_sentiment:
+        sentiment_val = get_market_sentiment()
+        
+        # Emoji és szöveg meghatározása a hangulathoz
+        if sentiment_val < 30: emoji, label = "😨", "Extreme Fear"
+        elif sentiment_val < 45: emoji, label = "😟", "Fear"
+        elif sentiment_val < 55: emoji, label = "😐", "Neutral"
+        elif sentiment_val < 70: emoji, label = "🙂", "Greed"
+        else: emoji, label = "🤑", "Extreme Greed"
+
+        st.write(f"**Piaci Hangulat:** {label}")
+        
+        # A csúszka vizualizációja
+        st.markdown(f"""
+            <div style="width: 100%; background-color: #333; border-radius: 10px; height: 8px; position: relative; margin-top: 15px;">
+                <div style="position: absolute; left: {sentiment_val}%; top: -12px; font-size: 18px; transform: translateX(-50%); transition: all 0.5s;">
+                    {emoji}
+                </div>
+                <div style="width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(to right, #ff4b4b, #ffa421, #f0f2f6, #90ee90, #2ecc71);"></div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.divider() # Egy vonal a fejléc és a grafikon közé
+
+    # --- IDŐTÁV ÉS GRAFIKON ---
+    live_data = get_live_price(selected)
+    current_price = live_data.get('c', 'N/A')
+    st.subheader(f"Aktuális ár: {current_price} USD")
+
+    # 1. Definiáljuk az opciókat
+    period_options = {"5 Nap": "5d", "1 Hónap": "1mo", "1 Év": "1y", "5 Év": "5y", "Maximum": "max"}
+    period_labels = list(period_options.keys())
+
+    # 2. Inicializáljuk a mentett indexet a memóriában, ha még nem létezik (alapértelmezett: 1 év, azaz index 2)
+    if 'current_period_idx' not in st.session_state:
+        st.session_state.current_period_idx = 2
+
+    # 3. Callback függvény: amikor kézzel átkattintasz, elmentjük az új indexet
+    def on_period_change():
+        new_label = st.session_state.period_selector_key
+        st.session_state.current_period_idx = period_labels.index(new_label)
+
+    # 4. A rádiógomb, ami a mentett indexet használja
+    sel_label = st.radio(
+        "Időtáv:", 
+        period_labels, 
+        horizontal=True, 
+        index=st.session_state.current_period_idx,
+        key="period_selector_key",
+        on_change=on_period_change
+    )
+
+    # 5. Adatok lekérése a TÉNYLEGESEN kiválasztott gomb alapján
+    hist_data = get_historical_data(selected, period_options[sel_label])
+    
+    if not hist_data.empty:
+        fig = px.line(hist_data, y='Close', labels={'Close': 'Árfolyam (USD)', 'index': 'Dátum'})
+        fig.update_layout(xaxis={'fixedrange': True}, yaxis={'fixedrange': True}, dragmode=False, hovermode="x unified")
+        st.plotly_chart(
+            fig, 
+            use_container_width=True, 
+            config={'scrollZoom': False, 'displayModeBar': False},
+            key=f"chart_{selected}" # Egyedi kulcs minden részvényhez a villódzás elkerülésére
+        )
+
+    st.divider()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Market Cap", f"{info.get('marketCap', 0) / 1e9:.2f} Mrd USD")
+    col2.metric("P/E Ráta", info.get('trailingPE', 'N/A'))
+    col3.metric("52 Heti Max", f"{info.get('fiftyTwoWeekHigh', 'N/A')} USD")
+
+    st.divider()
+
+    # --- ÉRTESÍTÉSEK ---
+    # --- ÉRTESÍTÉSEK ---
+    st.subheader("🔔 Értesítések beállítása")
+    
+    # Biztosítjuk, hogy az aktuális részvénynek legyen helye a szótárban
+    if selected not in st.session_state.price_alerts:
+        st.session_state.price_alerts[selected] = {"low": 0.0, "high": 0.0}
+
+    is_subscribed = selected in st.session_state.subscribed_news
+
+    with st.container(border=True):
+        col_info, col_low, col_high = st.columns(3)
+        
+        # 1. OSZLOP: Hírek és E-mail
+        with col_info:
+            st.write("**Hírek és Elemzések**")
+            
+            # 1. Megoldás a Hírek kapcsolóra
+            def toggle_news():
+                if st.session_state[f"news_toggle_{selected}"]:
+                    st.session_state.subscribed_news.add(selected)
+                else:
+                    st.session_state.subscribed_news.discard(selected)
+                # Azonnal mentjük a böngészőbe!
+                localS.setItem("stored_news_subs", list(st.session_state.subscribed_news))
+            
+            # 2. Rákötjük a függvényt az on_change-re
+            st.toggle(
+                "Hírek kérése", 
+                value=is_subscribed, 
+                key=f"news_toggle_{selected}",
+                on_change=toggle_news
+            )
+            
+            st.write("---") # Halvány elválasztó vonal
+            
+            # E-mail mező marad az on_change trükk nélkül, mert a text_input okosabb
+            email_input = st.text_input("E-mail a riasztásokhoz:", value=st.session_state.user_email, placeholder="pelda@email.hu")
+            if email_input != st.session_state.user_email:
+                if is_valid_email(email_input) or email_input == "":
+                    st.session_state.user_email = email_input
+                    localS.setItem("stored_email", email_input) 
+                    if email_input: st.success("✅ Mentve!")
+                else:
+                    st.error("❌ Érvénytelen formátum!")
+
+        # 2. OSZLOP: Alsó limit
+        with col_low:
+            st.write("**Alsó limit (Stop-Loss)**")
+            
+            # Itt is létrehozunk egy belső mentő függvényt a számdoboznak
+            def update_low_limit():
+                st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
+                localS.setItem("stored_alerts", st.session_state.price_alerts)
+
+            saved_low = st.session_state.price_alerts[selected]["low"]
+            st.number_input(
+                "Szólj, ha ez alá esik (USD):", 
+                value=float(saved_low), 
+                step=1.0, 
+                key=f"low_{selected}",
+                on_change=update_low_limit # Kattintásra hívja a mentést
+            )
+            
+            # Az érték visszaolvasása a változóba a vizuális visszajelzéshez (lentebb)
+            low_price = st.session_state[f"low_{selected}"]
+
+        # 3. OSZLOP: Felső limit
+        with col_high:
+            st.write("**Felső limit (Célár)**")
+            
+            def update_high_limit():
+                st.session_state.price_alerts[selected]["high"] = st.session_state[f"high_{selected}"]
+                localS.setItem("stored_alerts", st.session_state.price_alerts)
+
+            saved_high = st.session_state.price_alerts[selected]["high"]
+            st.number_input(
+                "Szólj, ha ez fölé megy (USD):", 
+                value=float(saved_high), 
+                step=1.0, 
+                key=f"high_{selected}",
+                on_change=update_high_limit # Kattintásra hívja a mentést
+            )
+            
+            # Visszaolvasás a vizuális visszajelzéshez
+            high_price = st.session_state[f"high_{selected}"]
+
+    # Vizuális visszajelzés (toast)
+    if low_price > 0 and current_price != 'N/A' and current_price < low_price:
+        st.toast(f"⚠️ {selected} beesett {low_price} USD alá!", icon="🛑")
+    if high_price > 0 and current_price != 'N/A' and current_price > high_price:
+        st.toast(f"🚀 {selected} elérte a {high_price} USD-t!", icon="💰")
+    
+    st.divider()
+
+    # --- AI CHAT ASSZISZTENS ---
+    st.subheader(f"💬 AI Pénzügyi Asszisztens ({selected})")
+    
+    # Külön chat memória minden részvényhez!
+    chat_key = f"messages_{selected}"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = [{"role": "assistant", "content": f"Szia! Én vagyok az AI asszisztensed. Miben segíthetek a(z) {selected} részvénnyel kapcsolatban?"}]
+
+    chat_container = st.container(height=400, border=True)
+    with chat_container:
+        for message in st.session_state[chat_key]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    if prompt := st.chat_input(f"Kérj véleményt a(z) {selected} részvényről..."):
+        # 1. Felhasználó üzenetének mentése és kirajzolása
+        st.session_state[chat_key].append({"role": "user", "content": prompt})
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+        
+        # 2. AI Válasz generálása és kirajzolása
+        with chat_container:
+            with st.chat_message("assistant"):
+                if not user_api_key:
+                    st.error("❌ Kérlek, add meg a Groq API kulcsodat a bal oldali sávban a chateléshez!")
+                else:
+                    with st.spinner("Elemzés folyamatban..."):
+                        try:
+                            # Groq kliens inicializálása
+                            client = OpenAI(api_key=user_api_key, base_url="https://api.groq.com/openai/v1")
+                            
+                            # Rendszer utasítás: Itt adjuk át titokban az aktuális árat az AI-nak!
+                            system_prompt = {
+                                "role": "system", 
+                                "content": f"Te egy profi magyar pénzügyi asszisztens vagy. A felhasználó a(z) {selected} részvényt elemzi. A részvény jelenlegi ára: {current_price} USD. Válaszolj szakszerűen, objektíven. Ne adj konkrét befektetési tanácsot."
+                            }
+                            
+                            # Összefűzzük a titkos utasítást az eddigi látható beszélgetéssel
+                            api_messages = [system_prompt] + st.session_state[chat_key]
+                            
+                            # Hívjuk a modellt
+                            response = client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=api_messages,
+                                max_tokens=1024
+                            )
+                            
+                            # Eredmény kinyerése
+                            ai_response = response.choices[0].message.content
+                            
+                            # Kirajzolás és mentés a memóriába
+                            st.markdown(ai_response)
+                            st.session_state[chat_key].append({"role": "assistant", "content": ai_response})
+                            
+                        except Exception as e:
+                            st.error(f"⚠️ Hálózati vagy API hiba: {str(e)}")
+
+    st.caption("⚠️ **Jogi nyilatkozat / Disclaimer:** *Az AI asszisztens által adott válaszok kizárólag edukációs és tájékoztató jellegűek, nem minősülnek pénzügyi, befektetési vagy adóügyi tanácsadásnak.*")
+
+    st.divider()
+
+    # --- HÍREK SZEKCIÓ ---
+    st.subheader(f"📰 Legfrissebb hírek ({selected})")
+    
+    # --- ÚJ: Lapozó memória (Session State) beállítása ---
+    if 'news_limit' not in st.session_state:
+        st.session_state.news_limit = 5
+    if 'news_stock' not in st.session_state:
+        st.session_state.news_stock = selected
+
+    # Ha a felhasználó átkattint egy MÁSIK részvényre, a lapozót visszaállítjuk 5-re!
+    if st.session_state.news_stock != selected:
+        st.session_state.news_limit = 5
+        st.session_state.news_stock = selected
+
+    news_items = get_stock_news(selected)
+
+    if news_items:
+        # 1. Bekerült az 'enumerate', ami ad egy 'i' sorszámot minden hírnek (0, 1, 2, 3...)
+        for i, item in enumerate(news_items[:st.session_state.news_limit]):
+            data = item.get('content', item)
+            
+            title = data.get('title', 'Nincs elérhető cím')
+            
+            raw_link = data.get('url') or data.get('clickThroughUrl') or data.get('link')
+            if isinstance(raw_link, dict):
+                link = raw_link.get('url', '#')
+            elif isinstance(raw_link, str):
+                link = raw_link
+            else:
+                link = '#'
+                
+            # --- TÖBBI KÓD (képek, dátumok beállítása) MARAD UGYANAZ ---
+            
+            # 2. Létrehozunk egy garantáltan egyedi azonosítót a sorszám segítségével
+            unique_id = f"{link}_{i}"
+            
+            img_url = ""
+            thumbnail = data.get('thumbnail')
+            if thumbnail and isinstance(thumbnail, dict):
+                resolutions = thumbnail.get('resolutions')
+                if resolutions and isinstance(resolutions, list) and len(resolutions) > 0:
+                    img_url = resolutions[0].get('url', '')
+            
+            publisher = data.get('publisher')
+            if not publisher and isinstance(data.get('provider'), dict):
+                publisher = data.get('provider').get('displayName', 'Ismeretlen forrás')
+            elif not publisher:
+                publisher = 'Ismeretlen forrás'
+            
+            timestamp = data.get('providerPublishTime')
+            pub_date_str = data.get('pubDate')
+            
+            if timestamp:
+                try:
+                    pub_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y. %m. %d. %H:%M')
+                except Exception:
+                    pub_date = "Ismeretlen időpont"
+            elif isinstance(pub_date_str, str):
+                pub_date = pub_date_str[:10].replace("-", ". ") + ". " + pub_date_str[11:16]
+            else:
+                pub_date = "Friss hír"
+            
+            with st.container(border=True):
+                st.markdown(f"##### [{title}]({link})")
+                col_img, col_meta, col_ai = st.columns([0.2, 0.35, 0.45]) 
+                
+                with col_img:
+                    if img_url:
+                        st.markdown(
+                            f'<a href="{link}" target="_blank">'
+                            f'<img src="{img_url}" width="100%" style="border-radius: 8px; object-fit: cover;">'
+                            f'</a>', 
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.write("*(Nincs kép)*")
+                        
+                with col_meta:
+                    st.write("") 
+                    st.caption(f"🏢 **{publisher}**")
+                    st.caption(f"🕒 {pub_date}")
+                    
+                with col_ai:
+                    if 'ai_analyses' not in st.session_state:
+                        st.session_state.ai_analyses = {}
+                    
+                    # 3. ITT A JAVÍTÁS: A 'link' helyett a 'unique_id'-t használjuk mindenhol!
+                    if unique_id in st.session_state.ai_analyses:
+                        st.info(st.session_state.ai_analyses[unique_id])
+                    else:
+                        st.write("") 
+                        if st.button("🤖 AI Elemzés kérése", key=f"btn_{unique_id}", use_container_width=True):
+                            with st.spinner("Elemzés..."):
+                                summary_text = data.get('summary', '') # Kinyerjük az összefoglalót a Yahoo-tól
+                                analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
+                                st.session_state.ai_analyses[unique_id] = analysis
+                                st.rerun()
