@@ -363,6 +363,20 @@ def get_stock_details(symbol):
     ticker = yf.Ticker(symbol)
     return ticker.info
 
+
+@st.cache_data(ttl=3600) # 1 óráig megjegyzi az adatokat
+def get_cached_ticker_data(symbol):
+    t = yf.Ticker(symbol)
+    # A .info a leglassabb, ezt csak egyszer kérjük le
+    return t.info, t.history(period="1d")
+
+@st.cache_data(ttl=3600)
+def get_eur_usd_rate():
+    try:
+        return yf.Ticker("EURUSD=X").history(period="1d")['Close'].iloc[-1]
+    except:
+        return 1.08
+
 @st.cache_data(ttl=3600)
 def get_historical_data(symbol, period):
     ticker = yf.Ticker(symbol)
@@ -584,20 +598,25 @@ if menu == "💰 Portfólióm":
         try:
             eur_usd_rate = yf.Ticker("EURUSD=X").history(period="1d")['Close'].iloc[-1]
         except:
-            eur_usd_rate = 1.08
+            # Lekérjük az árfolyamot (cache-ből jön, ha már megvan)
+            eur_usd_rate = get_eur_usd_rate()
         
         for item in st.session_state.portfolio:
-            ticker = yf.Ticker(item['symbol'])
-            hist = ticker.history(period="1d")
-            info = ticker.info
+            # Itt hívjuk meg a cache-elt adatokat
+            info, hist = get_cached_ticker_data(item['symbol'])
             
             currency = info.get('currency', 'USD')
             current_price = hist['Close'].iloc[-1] if not hist.empty else item['buy_price']
             sector = info.get('sector', 'Egyéb')
             
-            # --- OSZTALÉK SZÁMÍTÁSA JAVÍTVA ---
+            # Osztalék számítás (ugyanúgy, mint eddig)
             div_yield = info.get('dividendYield', 0)
-            if div_yield is None: div_yield = 0
+            if div_yield and div_yield > 0.2:
+                div_yield /= 100
+            elif div_yield is None:
+                div_yield = 0
+            
+            # ... a többi számításod marad ...
             
             # JAVÍTÁS: Ha a szám nagyobb, mint 0.2 (azaz 20%), akkor valószínűleg 
             # százalékban adta meg az API (pl. 0.7 a 0.7% helyett), tehát osztani kell 100-zal.
