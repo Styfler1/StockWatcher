@@ -205,11 +205,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-API_KEY = "d7jq70pr01qnk4oceb20d7jq70pr01qnk4oceb2g"
-
 # Természetesen ide a saját, valódi Gemini API kulcsodat kell beírnod majd!
-GEMINI_API_KEY = "AIzaSyDpKsXMK2DqcA0awy2rnKd8qmPIk4veK90"
-genai.configure(api_key=GEMINI_API_KEY)
+
 
 # --- 2. SESSION STATE (Állapotok inicializálása) ---
 
@@ -265,11 +262,25 @@ if saved_alerts is not None and 'loaded_alerts' not in st.session_state:
 @st.cache_data(ttl=3600)
 def search_stock(query):
     if not query: return []
-    url = f"https://finnhub.io/api/v1/search?q={query}&token={API_KEY}"
+    # A Yahoo Finance belső keresőjét hívjuk meg, ehhez nem kell token!
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
     try:
-        r = requests.get(url)
-        return r.json().get('result', [])[:5]
-    except: return []
+        r = requests.get(url, headers=headers)
+        data = r.json()
+        results = data.get('quotes', [])
+        
+        # Átalakítjuk a formátumot, hogy ugyanúgy működjön a kódod többi részével
+        formatted_results = []
+        for res in results:
+            if 'symbol' in res:
+                formatted_results.append({
+                    'symbol': res['symbol'],
+                    'description': res.get('longname') or res.get('shortname') or res['symbol']
+                })
+        return formatted_results[:5]
+    except Exception as e:
+        return []
 
 
 def get_market_sentiment():
@@ -602,50 +613,43 @@ if menu == "💰 Portfólióm":
             eur_usd_rate = get_eur_usd_rate()
         
         for item in st.session_state.portfolio:
-            # Itt hívjuk meg a cache-elt adatokat
+            # 1. Adatlekérés cache-ből
             info, hist = get_cached_ticker_data(item['symbol'])
             
+            # 2. Alapadatok kinyerése biztonságosan
             currency = info.get('currency', 'USD')
             current_price = hist['Close'].iloc[-1] if not hist.empty else item['buy_price']
-            sector = info.get('sector', 'Egyéb')
+            sector = info.get('sector', 'Information Technology') # Alapértelmezett, ha nincs meg
             
-            # Osztalék számítás (ugyanúgy, mint eddig)
+            # 3. Osztalék számítás (CSAK EGYSZER!)
             div_yield = info.get('dividendYield', 0)
-            if div_yield and div_yield > 0.2:
-                div_yield /= 100
-            elif div_yield is None:
+            if div_yield:
+                if div_yield > 0.2: # Ha százalékban jött (pl. 0.7 helyett 0.7%)
+                    div_yield /= 100
+            else:
                 div_yield = 0
             
-            # ... a többi számításod marad ...
-            
-            # JAVÍTÁS: Ha a szám nagyobb, mint 0.2 (azaz 20%), akkor valószínűleg 
-            # százalékban adta meg az API (pl. 0.7 a 0.7% helyett), tehát osztani kell 100-zal.
-            # A legtöbb részvény nem fizet 20% felett.
-            if div_yield > 0.2:
-                div_yield = div_yield / 100
-            
-            # Éves osztalék a natív devizában
             annual_div_native = (current_price * item['qty']) * div_yield
-            # ----------------------------------
-            # --------------------------
 
+            # 4. Értékek számítása
             invested_native = item['buy_price'] * item['qty']
             current_value_native = current_price * item['qty']
             p_l_native = current_value_native - invested_native
             
-            # Átváltás USD-re
+            # 5. Átváltás USD-re az összesítéshez
             if currency == 'EUR':
                 invested_usd = invested_native * eur_usd_rate
                 current_value_usd = current_value_native * eur_usd_rate
-                annual_div_usd = annual_div_native * eur_usd_rate # <--- Átváltott osztalék
+                annual_div_usd = annual_div_native * eur_usd_rate
             else:
                 invested_usd = invested_native
                 current_value_usd = current_value_native
                 annual_div_usd = annual_div_native
                 
+            # 6. Összesítők frissítése
             total_invested_usd += invested_usd
             current_total_value_usd += current_value_usd
-            total_annual_dividend_usd += annual_div_usd # <--- Hozzáadás az összesített kasszához
+            total_annual_dividend_usd += annual_div_usd
             
             portfolio_data.append({
                 'Részvény': item['symbol'],
@@ -654,7 +658,7 @@ if menu == "💰 Portfólióm":
                 'Jelenlegi Érték': current_value_native,
                 'Profit/Veszteség': p_l_native,
                 'Szektor': sector,
-                'Osztalék (Éves)': annual_div_native, # <--- Beletesszük a táblázatba is
+                'Osztalék (Éves)': annual_div_native,
                 'Jelenlegi Érték (USD)': current_value_usd, 
                 'Befektetve (USD)': invested_usd
             })
