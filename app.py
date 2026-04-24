@@ -189,18 +189,23 @@ st.set_page_config(page_title="Tőzsde Figyelő", page_icon="📈", layout="wide
 
 st.markdown("""
     <style>
+        /* 1. A fő tartály felső margójának csökkentése */
+        .block-container {
+            padding-top: 3rem !important;
+            padding-bottom: 0rem !important;
+            padding-left: 5rem !important;
+            padding-right: 5rem !important;
+        }
+
+        /* 2. Az első elem (title/header) feletti üres hely eltüntetése */
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 2rem !important;
+        }
+
+        /* 3. A korábbi sidebar-os javításaid maradjanak itt... */
         [data-testid="stSidebarHeader"] {
             padding-top: 0.5rem !important;
-            padding-bottom: 0rem !important;
             min-height: 2rem !important; 
-            height: 2rem !important; 
-        }
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 0rem !important;
-        }
-        [data-testid="stSidebarUserContent"] h1:first-of-type {
-            margin-top: -1.5rem !important;
-            padding-top: 0rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -226,6 +231,8 @@ if 'user_email' not in st.session_state:
     st.session_state.user_email = ""
 if 'price_alerts' not in st.session_state:
     st.session_state.price_alerts = {}
+if 'ai_analyses' not in st.session_state:
+    st.session_state.ai_analyses = {}
 
 # 2. LÉPÉS: Adatok lekérése a böngésző memóriájából
 saved_portfolio = localS.getItem("stored_portfolio")
@@ -234,8 +241,20 @@ saved_email = localS.getItem("stored_email")
 saved_alerts = localS.getItem("stored_alerts")
 saved_news_subs = localS.getItem("stored_news_subs") # ÚJ: Hír feliratkozások
 
+
+
 # 3. LÉPÉS: Betöltés a memóriába (Csak legelső alkalommal)
-# 3. LÉPÉS: Betöltés a memóriába (Csak legelső alkalommal)
+
+# --- SESSION STATE ELEJÉN ---
+if 'subscribed_alerts' not in st.session_state:
+    st.session_state.subscribed_alerts = set()
+
+# Betöltés LocalStorage-ból
+saved_alert_subs = localS.getItem("stored_alert_subs")
+if saved_alert_subs is not None and 'loaded_alert_subs' not in st.session_state:
+    st.session_state.subscribed_alerts = set(saved_alert_subs)
+    st.session_state.loaded_alert_subs = True
+
 if saved_portfolio and 'loaded_port' not in st.session_state:
     st.session_state.portfolio = saved_portfolio
     st.session_state.loaded_port = True
@@ -243,6 +262,10 @@ if saved_portfolio and 'loaded_port' not in st.session_state:
 if saved_favorites and 'loaded_fav' not in st.session_state:
     st.session_state.favorites = set(saved_favorites)
     st.session_state.loaded_fav = True
+
+# --- SESSION STATE INICIALIZÁLÁSA (A kód elején) ---
+if 'ai_analyses' not in st.session_state:
+    st.session_state.ai_analyses = {}
 
 # JAVÍTÁS ITT: "is not None" kell ide, nem csak "saved_news_subs"
 if saved_news_subs is not None and 'loaded_news' not in st.session_state:
@@ -945,11 +968,12 @@ if menu == "💰 Portfólióm":
             export_data = {
                 "portfolio": st.session_state.portfolio,
                 "favorites": list(st.session_state.favorites),
+                "price_alerts": st.session_state.price_alerts, # A konkrét USD értékek
+                "subscribed_news": list(st.session_state.subscribed_news), # Hír kapcsolók
+                "subscribed_alerts": list(st.session_state.subscribed_alerts), # Ár riasztás kapcsolók
                 "settings": {
                     "email": st.session_state.get('user_email', ''),
-                    "groq_key": st.session_state.get('groq_api_key', ''),
-                    "notifications": st.session_state.get('notification_prefs', {}) 
-                    # Megjegyzés: a notification_prefs-t úgy mentsd, ahogy a pipákat kezeled
+                    "groq_key": st.session_state.get('groq_api_key', '')
                 }
             }
             json_string = json.dumps(export_data, indent=4)
@@ -959,7 +983,7 @@ if menu == "💰 Portfólióm":
                 data=json_string,
                 file_name="stockwatcher_full_backup.json",
                 mime="application/json",
-                help="Menti a portfóliót, a kedvenceket, az API kulcsot és a beállításokat is."
+                help="Menti a portfóliót, a kedvenceket, a limiteket és az összes beállítást."
             )
 
     with col_imp:
@@ -971,25 +995,31 @@ if menu == "💰 Portfólióm":
                     import_data = json.load(uploaded_file)
                     
                     if st.button("🔄 Minden adat felülírása és betöltése"):
-                        # 1. Alapadatok visszatöltése
+                        # 1. Alapadatok (Listák és szótárak)
                         st.session_state.portfolio = import_data.get("portfolio", [])
                         st.session_state.favorites = set(import_data.get("favorites", []))
+                        st.session_state.price_alerts = import_data.get("price_alerts", {})
                         
-                        # 2. Beállítások visszatöltése
+                        # 2. Új kapcsolók (Hírek és Riasztás feliratkozások)
+                        st.session_state.subscribed_news = set(import_data.get("subscribed_news", []))
+                        st.session_state.subscribed_alerts = set(import_data.get("subscribed_alerts", []))
+                        
+                        # 3. Globális beállítások
                         settings = import_data.get("settings", {})
                         st.session_state.user_email = settings.get("email", "")
                         st.session_state.groq_api_key = settings.get("groq_key", "")
-                        st.session_state.notification_prefs = settings.get("notifications", {})
 
-                        # 3. Mentés a böngésző LocalStorage-ébe is, hogy frissítés után is megmaradjon
+                        # 4. Mentés a böngésző LocalStorage-ébe
                         if 'localS' in globals():
                             localS.setItem("stored_portfolio", st.session_state.portfolio)
                             localS.setItem("stored_favorites", list(st.session_state.favorites))
-                            localS.setItem("user_email", st.session_state.user_email)
-                            localS.setItem("groq_api_key", st.session_state.groq_api_key)
-                            # Az értesítéseket is elmentheted ide...
+                            localS.setItem("stored_email", st.session_state.user_email)
+                            localS.setItem("stored_groq_key", st.session_state.groq_api_key)
+                            localS.setItem("stored_alerts", st.session_state.price_alerts)
+                            localS.setItem("stored_news_subs", list(st.session_state.subscribed_news))
+                            localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts))
 
-                        st.success("✅ Minden beállítás és adat sikeresen betöltve!")
+                        st.success("✅ Minden adat és riasztási beállítás sikeresen betöltve!")
                         st.rerun()
                 except Exception as e:
                     st.error(f"❌ Hiba a fájl feldolgozása közben: {e}")
@@ -1158,58 +1188,63 @@ else:
     info = get_stock_details(selected)
     company_name = info.get('longName', selected)
 
-    # 1. ELŐBB A FÜGGVÉNY (Callback)
+    # 1. Callback a kedvencekhez (marad a régi)
     def toggle_favorite():
-        # Megnézzük a négyzet aktuális állapotát a session_state-ben
         if st.session_state[f"check_{selected}"]:
             st.session_state.favorites.add(selected)
         else:
             st.session_state.favorites.discard(selected)
-        
-        # Mentés a böngészőbe (ha van localS definiálva)
         if 'localS' in globals():
             localS.setItem("stored_favorites", list(st.session_state.favorites))
 
-    # 2. A FEJLÉC ELRENDEZÉSE EGY SORBAN
-    col_title, col_fav, col_sentiment = st.columns([0.5, 0.2, 0.3])
+    # 2. ÚJ: SZŰKEBB OSZLOP ARÁNYOK [Részvény, Kedvenc, Hangulat]
+    # Itt a 0.15 és 0.15 miatt szinte egymás mellett lesznek
+    col_title, col_fav, col_sentiment = st.columns([0.2, 0.3, 0.5])
 
     with col_title:
         st.title(f"📊 {selected}")
-        st.caption(company_name) # Így szebb, a név a kód alatt van kicsiben
+        st.caption(company_name)
 
     with col_fav:
-        st.write("###") # Egy kis térköz, hogy a checkbox egy vonalba kerüljön a szöveggel
+        # Egy kis trükk: lejjebb toljuk a checkboxot, hogy pont a cím közepénél legyen
+        st.markdown('<div style="padding-top: 35px;"></div>', unsafe_allow_html=True)
         is_fav = selected in st.session_state.favorites
         st.checkbox(
-            "⭐ Kedvenc", 
+            "⭐", # Kivettük a "Kedvenc" szöveget, mert a csillag magáért beszél és közelebb hozza a gombot
             value=is_fav, 
             key=f"check_{selected}", 
-            on_change=toggle_favorite
+            on_change=toggle_favorite,
+            help="Hozzáadás a kedvencekhez"
         )
 
     with col_sentiment:
         sentiment_val = get_market_sentiment()
         
-        # Emoji és szöveg meghatározása a hangulathoz
+        
+        # Emoji és szöveg meghatározása (marad a régi logika)
         if sentiment_val < 30: emoji, label = "😨", "Extreme Fear"
         elif sentiment_val < 45: emoji, label = "😟", "Fear"
         elif sentiment_val < 55: emoji, label = "😐", "Neutral"
         elif sentiment_val < 70: emoji, label = "🙂", "Greed"
         else: emoji, label = "🤑", "Extreme Greed"
 
-        st.write(f"**Piaci Hangulat:** {label}")
-        
-        # A csúszka vizualizációja
+        # EGYETLEN HTML blokkban a szöveg és a csúszka
         st.markdown(f"""
-            <div style="width: 100%; background-color: #333; border-radius: 10px; height: 8px; position: relative; margin-top: 15px;">
-                <div style="position: absolute; left: {sentiment_val}%; top: -12px; font-size: 18px; transform: translateX(-50%); transition: all 0.5s;">
-                    {emoji}
+            <div style="padding-top: 5px;">
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fafafa;">
+                    Piaci Hangulat: <span style="color: #00ffcc;">{label}</span>
                 </div>
-                <div style="width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(to right, #ff4b4b, #ffa421, #f0f2f6, #90ee90, #2ecc71);"></div>
+                <div style="width: 100%; background-color: #333; border-radius: 10px; height: 8px; position: relative; margin-top: 15px;">
+                    <div style="position: absolute; left: {sentiment_val}%; top: -14px; font-size: 20px; transform: translateX(-50%); transition: all 0.5s; z-index: 10;">
+                        {emoji}
+                    </div>
+                    <div style="width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(to right, #ff4b4b, #ffa421, #f0f2f6, #90ee90, #2ecc71);"></div>
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
-    st.divider() # Egy vonal a fejléc és a grafikon közé
+
+    st.divider()
 
     # --- IDŐTÁV ÉS GRAFIKON ---
     live_data = get_live_price(selected)
@@ -1275,29 +1310,46 @@ else:
         col_info, col_low, col_high = st.columns(3)
         
         # 1. OSZLOP: Hírek és E-mail
+        # 1. OSZLOP: Hírek, Árfolyam-riasztások és E-mail
         with col_info:
-            st.write("**Hírek és Elemzések**")
+            st.write("**Értesítések állapota**")
             
-            # 1. Megoldás a Hírek kapcsolóra
+            # --- 1. HÍREK KAPCSOLÓ ---
             def toggle_news():
                 if st.session_state[f"news_toggle_{selected}"]:
                     st.session_state.subscribed_news.add(selected)
                 else:
                     st.session_state.subscribed_news.discard(selected)
-                # Azonnal mentjük a böngészőbe!
                 localS.setItem("stored_news_subs", list(st.session_state.subscribed_news))
             
-            # 2. Rákötjük a függvényt az on_change-re
+            is_subscribed_news = selected in st.session_state.subscribed_news
             st.toggle(
                 "Hírek kérése", 
-                value=is_subscribed, 
+                value=is_subscribed_news, 
                 key=f"news_toggle_{selected}",
                 on_change=toggle_news
+            )
+
+            # --- 2. ÁRFOLYAM RIASZTÁS KAPCSOLÓ ---
+            def toggle_price_sub():
+                if st.session_state[f"alert_sub_{selected}"]:
+                    st.session_state.subscribed_alerts.add(selected)
+                else:
+                    st.session_state.subscribed_alerts.discard(selected)
+                localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts))
+
+            is_subscribed_alerts = selected in st.session_state.subscribed_alerts
+            st.toggle(
+                "Árfolyam riasztások", 
+                value=is_subscribed_alerts, 
+                key=f"alert_sub_{selected}",
+                on_change=toggle_price_sub,
+                help="Kapcsold be, ha e-mailt kérsz a lenti limitek elérésekor."
             )
             
             st.write("---") # Halvány elválasztó vonal
             
-            # E-mail mező marad az on_change trükk nélkül, mert a text_input okosabb
+            # E-mail mező
             email_input = st.text_input("E-mail a riasztásokhoz:", value=st.session_state.user_email, placeholder="pelda@email.hu")
             if email_input != st.session_state.user_email:
                 if is_valid_email(email_input) or email_input == "":
@@ -1311,22 +1363,33 @@ else:
         with col_low:
             st.write("**Alsó limit (Stop-Loss)**")
             
-            # Itt is létrehozunk egy belső mentő függvényt a számdoboznak
             def update_low_limit():
                 st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
                 localS.setItem("stored_alerts", st.session_state.price_alerts)
 
             saved_low = st.session_state.price_alerts[selected]["low"]
-            st.number_input(
+            low_price = st.number_input(
                 "Szólj, ha ez alá esik (USD):", 
                 value=float(saved_low), 
                 step=1.0, 
                 key=f"low_{selected}",
-                on_change=update_low_limit # Kattintásra hívja a mentést
+                on_change=update_low_limit
             )
             
-            # Az érték visszaolvasása a változóba a vizuális visszajelzéshez (lentebb)
-            low_price = st.session_state[f"low_{selected}"]
+            # VIZUÁLIS CSÚSZKA (Alsó limithez)
+            if low_price > 0 and current_price != 'N/A':
+                # Kiszámoljuk, hány százalékra van az ár a limittől (0-100 skálán, ahol a 0 a limit)
+                dist_low = ((current_price - low_price) / current_price) * 100
+                dist_low = max(0, min(100, dist_low)) # Korlátozás 0 és 100 közé
+                
+                color = "#ff4b4b" if dist_low < 5 else "#ffa421" # Piros, ha nagyon közel van
+                
+                st.markdown(f"""
+                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Távolság: {dist_low:.1f}%</div>
+                    <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
+                        <div style="width: {dist_low}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
+                    </div>
+                """, unsafe_allow_html=True)
 
         # 3. OSZLOP: Felső limit
         with col_high:
@@ -1337,16 +1400,28 @@ else:
                 localS.setItem("stored_alerts", st.session_state.price_alerts)
 
             saved_high = st.session_state.price_alerts[selected]["high"]
-            st.number_input(
+            high_price = st.number_input(
                 "Szólj, ha ez fölé megy (USD):", 
                 value=float(saved_high), 
                 step=1.0, 
                 key=f"high_{selected}",
-                on_change=update_high_limit # Kattintásra hívja a mentést
+                on_change=update_high_limit
             )
-            
-            # Visszaolvasás a vizuális visszajelzéshez
-            high_price = st.session_state[f"high_{selected}"]
+
+            # VIZUÁLIS CSÚSZKA (Felső limithez)
+            if high_price > 0 and current_price != 'N/A':
+                # Kiszámoljuk, hány százalékot tettünk meg a célár felé
+                progress_high = (current_price / high_price) * 100
+                progress_high = max(0, min(100, progress_high))
+                
+                color = "#2ecc71" if progress_high > 95 else "#3498db" # Zöld, ha majdnem elértük
+                
+                st.markdown(f"""
+                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Célár elérése: {progress_high:.1f}%</div>
+                    <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
+                        <div style="width: {progress_high}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
+                    </div>
+                """, unsafe_allow_html=True)
 
     # Vizuális visszajelzés (toast)
     if low_price > 0 and current_price != 'N/A' and current_price < low_price:
@@ -1500,18 +1575,18 @@ else:
                     st.caption(f"🏢 **{publisher}**")
                     st.caption(f"🕒 {pub_date}")
                     
+                # A hír-megjelenítő ciklusban:
                 with col_ai:
-                    if 'ai_analyses' not in st.session_state:
-                        st.session_state.ai_analyses = {}
-                    
-                    # 3. ITT A JAVÍTÁS: A 'link' helyett a 'unique_id'-t használjuk mindenhol!
                     if unique_id in st.session_state.ai_analyses:
                         st.info(st.session_state.ai_analyses[unique_id])
                     else:
-                        st.write("") 
-                        if st.button("🤖 AI Elemzés kérése", key=f"btn_{unique_id}", use_container_width=True):
-                            with st.spinner("Elemzés..."):
-                                summary_text = data.get('summary', '') # Kinyerjük az összefoglalót a Yahoo-tól
-                                analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
-                                st.session_state.ai_analyses[unique_id] = analysis
-                                st.rerun()
+                        # CSAK AKKOR engedjük a gombot, ha van kulcs, különben csak egy figyelmeztetést kap
+                        if not user_api_key:
+                            st.caption("🔑 Adj meg kulcsot az elemzéshez")
+                        else:
+                            if st.button("🤖 AI Elemzés", key=f"btn_{unique_id}", use_container_width=True):
+                                with st.spinner("Elemzés..."):
+                                    summary_text = data.get('summary', '')
+                                    analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
+                                    st.session_state.ai_analyses[unique_id] = analysis
+                                    st.rerun()
