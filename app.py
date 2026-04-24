@@ -12,6 +12,10 @@ import re
 from streamlit_local_storage import LocalStorage
 import json
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 
 # ==========================================
@@ -249,6 +253,9 @@ saved_news_subs = localS.getItem("stored_news_subs") # ÚJ: Hír feliratkozások
 if 'subscribed_alerts' not in st.session_state:
     st.session_state.subscribed_alerts = set()
 
+if 'sent_alerts' not in st.session_state:
+    st.session_state.sent_alerts = {} # Formátum: {"AAPL_low": "2024-03-20"}
+
 # Betöltés LocalStorage-ból
 saved_alert_subs = localS.getItem("stored_alert_subs")
 if saved_alert_subs is not None and 'loaded_alert_subs' not in st.session_state:
@@ -304,6 +311,30 @@ def search_stock(query):
         return formatted_results[:5]
     except Exception as e:
         return []
+    
+
+
+def send_email_alert(target_email, subject, body):
+    # Ezeket a Streamlit Secrets-be kell majd tenned!
+    sender_email = st.secrets["EMAIL_USER"]
+    sender_password = st.secrets["EMAIL_PASSWORD"]
+    
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = target_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+    
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Hiba az e-mail küldésekor: {e}")
+        return False
 
 
 def get_market_sentiment():
@@ -1297,14 +1328,17 @@ else:
     st.divider()
 
     # --- ÉRTESÍTÉSEK ---
-    # --- ÉRTESÍTÉSEK ---
     st.subheader("🔔 Értesítések beállítása")
+
+    
     
     # Biztosítjuk, hogy az aktuális részvénynek legyen helye a szótárban
     if selected not in st.session_state.price_alerts:
         st.session_state.price_alerts[selected] = {"low": 0.0, "high": 0.0}
 
     is_subscribed = selected in st.session_state.subscribed_news
+
+
 
     with st.container(border=True):
         col_info, col_low, col_high = st.columns(3)
@@ -1428,6 +1462,35 @@ else:
         st.toast(f"⚠️ {selected} beesett {low_price} USD alá!", icon="🛑")
     if high_price > 0 and current_price != 'N/A' and current_price > high_price:
         st.toast(f"🚀 {selected} elérte a {high_price} USD-t!", icon="💰")
+
+
+        # --- RIASZTÁSI LOGIKA INDÍTÁSA ---
+    # Ez a rész már a konténeren kívül van, de a változókat ismeri!
+    
+    today_str = datetime.date.today().isoformat()
+
+    # Csak akkor fut le, ha van megadott email és be van kapcsolva a riasztás erre a részvényre
+    if st.session_state.user_email and selected in st.session_state.subscribed_alerts:
+        
+        # ALSÓ LIMIT (Stop-Loss)
+        alert_key_low = f"{selected}_low"
+        if low_price > 0 and current_price != 'N/A' and current_price < low_price:
+            if st.session_state.sent_alerts.get(alert_key_low) != today_str:
+                subject = f"⚠️ STOP-LOSS: {selected} beesett!"
+                body = f"Szia!\n\nA(z) {selected} árfolyama {current_price} USD, ami a {low_price} USD limited alatt van."
+                if send_email_alert(st.session_state.user_email, subject, body):
+                    st.session_state.sent_alerts[alert_key_low] = today_str
+                    st.toast("📧 Riasztási e-mail elküldve!", icon="📩")
+
+        # FELSŐ LIMIT (Célár)
+        alert_key_high = f"{selected}_high"
+        if high_price > 0 and current_price != 'N/A' and current_price > high_price:
+            if st.session_state.sent_alerts.get(alert_key_high) != today_str:
+                subject = f"🚀 CÉLÁR: {selected} elérve!"
+                body = f"Szia!\n\nA(z) {selected} árfolyama {current_price} USD, elérte a {high_price} USD céláradat."
+                if send_email_alert(st.session_state.user_email, subject, body):
+                    st.session_state.sent_alerts[alert_key_high] = today_str
+                    st.toast("📧 Célár értesítés elküldve!", icon="📩")
     
     st.divider()
 
