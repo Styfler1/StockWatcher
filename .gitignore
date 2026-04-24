@@ -6,6 +6,18 @@ __pycache__/
 # C extensions
 *.so
 
+# --- Streamlit specific ---
+.streamlit/
+static/
+
+*.json
+!stockwatcher_backup_template.json
+
+# --- API Keys---
+.env
+secrets.toml
+
+
 # Distribution / packaging
 .Python
 build/
