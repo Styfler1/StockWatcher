@@ -514,29 +514,27 @@ def get_stock_details(symbol):
 def get_cached_ticker_data(symbol):
     t = yf.Ticker(symbol)
     try:
-        # Itt próbáljuk lekérni az adatokat
+        # 1. Próbáljuk meg a teljes adatcsomagot
         info = t.info
         hist = t.history(period="1d")
-        
-        # Ha a Yahoo éppen blokkol, sokszor üres szótárat ad vissza hiba nélkül is
-        if not info or len(info) < 5:
-            raise ValueError("Rate limit")
-            
+        if not info or len(info) < 5: raise ValueError("Limit")
         return info, hist
-        
-    except Exception as e:
-        # HA HIBA VAN (Rate limit vagy bármi), nem hagyjuk összeomlani az appot!
-        # Visszaadunk egy alapértelmezett "kamu" adatcsomagot:
-        dummy_info = {
-            'symbol': symbol,
-            'longName': symbol,
-            'currency': 'USD',
-            'sector': 'Adat nem elérhető',
-            'dividendYield': 0,
-            'marketCap': 0
-        }
-        # Egy üres táblázatot adunk a történetnek
-        return dummy_info, pd.DataFrame()
+    except:
+        try:
+            # 2. HA TILTANAK: Csak az árat próbáljuk meg a history-ból (ez gyakrabban átmegy)
+            hist = t.history(period="2d")
+            last_p = hist['Close'].iloc[-1]
+            prev_p = hist['Close'].iloc[-2]
+            # Összerakunk egy minimális infót kézzel
+            fallback_info = {
+                'symbol': symbol, 'longName': symbol, 'currency': 'USD',
+                'currentPrice': last_p, 'regularMarketPreviousClose': prev_p,
+                'sector': 'Adat nem elérhető (Rate Limit)', 'dividendYield': 0
+            }
+            return fallback_info, hist
+        except:
+            # 3. VÉGSŐ ESET: Ha semmi sem megy
+            return {'symbol': symbol, 'longName': symbol, 'currency': 'USD'}, pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def get_eur_usd_rate():
@@ -1199,38 +1197,34 @@ if menu == "💰 Portfólióm":
                 import_data = json.load(uploaded_file)
                 
                 if st.button("🔄 Minden adat felülírása és betöltése"):
-                    # 1. ADATOK BETÖLTÉSE A MEMÓRIÁBA (Session State)
+                    # 1. Betöltés a memóriába
                     st.session_state.portfolio = import_data.get("portfolio", [])
                     st.session_state.favorites = set(import_data.get("favorites", []))
                     st.session_state.price_alerts = import_data.get("price_alerts", {})
                     st.session_state.subscribed_news = set(import_data.get("subscribed_news", []))
                     st.session_state.subscribed_alerts = set(import_data.get("subscribed_alerts", []))
                     
-                    settings = import_data.get("settings", {})
-                    st.session_state.user_email = settings.get("email", "")
-                    st.session_state.groq_api_key = settings.get("groq_key", "")
-
-                    # 2. KRITIKUS LÉPÉS: Megjelöljük, hogy az adatok már be vannak töltve!
-                    # Ez akadályozza meg, hogy a kódod eleje felülírja őket a régivel.
+                    # 2. Megjelöljük, hogy betöltve (ne írja felül a kód eleje)
                     st.session_state.loaded_port = True
                     st.session_state.loaded_fav = True
-                    st.session_state.loaded_news = True
-                    st.session_state.loaded_email = True
-                    st.session_state.loaded_alerts = True
-                    st.session_state.loaded_alert_subs = True
-
-                    # 3. KULCS ÜTKÖZÉS JAVÍTÁSA: 
-                    # Nem hívunk meg sok setItem-et egyszerre. 
-                    # Ehelyett csak egy sikeres üzenetet küldünk, és a rerun után 
-                    # az adatok már a memóriában lesznek. A böngészőbe mentés pedig
-                    # majd az első manuális változtatáskor (pl. kedvenc gomb) megtörténik.
                     
-                    st.success("✅ Adatok betöltve a memóriába! Kérlek, frissíts egyet a mentés véglegesítéséhez.")
+                    # 3. KÉNYSZERÍTETT MENTÉS A BÖNGÉSZŐBE (EGYBEN)
+                    # Hogy elkerüljük a 'key=set' hibát, csak a legfontosabbakat mentjük el egy ciklusban
+                    storage_map = {
+                        "stored_portfolio": st.session_state.portfolio,
+                        "stored_favorites": list(st.session_state.favorites),
+                        "stored_alerts": st.session_state.price_alerts,
+                        "stored_news_subs": list(st.session_state.subscribed_news),
+                        "stored_alert_subs": list(st.session_state.subscribed_alerts)
+                    }
+                    
+                    # Ezt a részt így használd, hogy ne legyen kulcs-ütközés:
+                    for k, v in storage_map.items():
+                        localS.setItem(k, v, key=f"save_{k}") # EGYEDI KULCS!
+                    
+                    st.success("✅ Sikeres importálás és mentés! Frissítek...")
+                    time.sleep(1)
                     st.rerun()
-                    
-            except Exception as e:
-                st.error(f"❌ Hiba a fájl feldolgozása közben: {e}")
-
     
 
 elif menu == "ℹ️ A programról":
