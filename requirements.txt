@@ -6,3 +6,4 @@ requests
 openai
 google-generativeai
 streamlit-local-storage
+streamlit-autorefresh
