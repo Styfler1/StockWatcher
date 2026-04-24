@@ -247,7 +247,7 @@ st.markdown("""
             .block-container {
                 padding-left: 5rem !important;
                 padding-right: 5rem !important;
-                padding-top: 2rem !important;
+                padding-top: 3rem !important;
             }
         }
 
