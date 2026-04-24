@@ -510,11 +510,33 @@ def get_stock_details(symbol):
         }
 
 
-@st.cache_data(ttl=3600) # 1 óráig megjegyzi az adatokat
+@st.cache_data(ttl=3600)
 def get_cached_ticker_data(symbol):
     t = yf.Ticker(symbol)
-    # A .info a leglassabb, ezt csak egyszer kérjük le
-    return t.info, t.history(period="1d")
+    try:
+        # Itt próbáljuk lekérni az adatokat
+        info = t.info
+        hist = t.history(period="1d")
+        
+        # Ha a Yahoo éppen blokkol, sokszor üres szótárat ad vissza hiba nélkül is
+        if not info or len(info) < 5:
+            raise ValueError("Rate limit")
+            
+        return info, hist
+        
+    except Exception as e:
+        # HA HIBA VAN (Rate limit vagy bármi), nem hagyjuk összeomlani az appot!
+        # Visszaadunk egy alapértelmezett "kamu" adatcsomagot:
+        dummy_info = {
+            'symbol': symbol,
+            'longName': symbol,
+            'currency': 'USD',
+            'sector': 'Adat nem elérhető',
+            'dividendYield': 0,
+            'marketCap': 0
+        }
+        # Egy üres táblázatot adunk a történetnek
+        return dummy_info, pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def get_eur_usd_rate():
