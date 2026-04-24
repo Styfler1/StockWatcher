@@ -1225,6 +1225,11 @@ if menu == "💰 Portfólióm":
                     st.success("✅ Sikeres importálás és mentés! Frissítek...")
                     time.sleep(1)
                     st.rerun()
+            except Exception as e: # <--- EZ HIÁNYZOTT!
+                # Ha a fenti elhasal, ide ugrik a program
+                st.warning(f"Yahoo hiba a(z) {symbol} lekérésekor: {e}")
+                info = {'symbol': symbol, 'longName': symbol}
+                hist = pd.DataFrame()
     
 
 elif menu == "ℹ️ A programról":
