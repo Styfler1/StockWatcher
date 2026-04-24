@@ -622,12 +622,12 @@ if menu == "💰 Portfólióm":
             sector = info.get('sector', 'Information Technology') # Alapértelmezett, ha nincs meg
             
             # 3. Osztalék számítás (CSAK EGYSZER!)
+           # 2. Osztalék számítás egy helyen, tisztán
             div_yield = info.get('dividendYield', 0)
-            if div_yield:
-                if div_yield > 0.2: # Ha százalékban jött (pl. 0.7 helyett 0.7%)
-                    div_yield /= 100
-            else:
+            if div_yield is None: 
                 div_yield = 0
+            elif div_yield > 0.2: # Javítás a százalékos formátumhoz
+                div_yield /= 100
             
             annual_div_native = (current_price * item['qty']) * div_yield
 
@@ -662,8 +662,6 @@ if menu == "💰 Portfólióm":
                 'Jelenlegi Érték (USD)': current_value_usd, 
                 'Befektetve (USD)': invested_usd
             })
-
-        df_portfolio = pd.DataFrame(portfolio_data)
 
         df_portfolio = pd.DataFrame(portfolio_data)
 
