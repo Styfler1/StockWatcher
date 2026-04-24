@@ -16,6 +16,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+from streamlit_autorefresh import st_autorefresh
 
 
 # ==========================================
@@ -55,6 +56,26 @@ translations = {
         'email_error': "❌ Érvénytelen formátum!",
         'lower_limit': "**Alsó limit (Stop-Loss)**",
         'upper_limit': "**Felső limit (Célár)**",
+        'about_usage_title': "📖 Használati útmutató",
+        'about_usage_text': """
+            ### 🤖 AI Szolgáltatások aktiválása
+            A teljes élményhez kérjen egy ingyenes **Groq API kulcsot** a [Groq Console](https://console.groq.com/) oldalon, majd illessze be a bal oldali sávban található **AI Beállítások** mezőbe. Ekkor a portfólió elemző és a hírek gyorselemzése is elérhetővé válik.
+
+            ### 🔔 Értesítések és Frissítés
+            A program az **árfolyamokat 1 percenként**, a **híreket pedig 30 percenként** ellenőrzi automatikusan.
+            
+            > **⚠️ FONTOS FIGYELMEZTETÉS:**
+            > Mivel az alkalmazás nem használ központi szervert az adatok tárolására, az értesítések **csak akkor működnek**, ha:
+            > 1. A böngészőben **nyitva van az oldal**.
+            > 2. A számítógép **bekapcsolt állapotban** van.
+            > 3. Az **Auto-Refresh** (automatikus frissítés) funkció aktív.
+            
+            A legprecízebb élmény érdekében ajánlott a programot egy folyamatosan futó szerveren vagy egy dedikált, állandóan működő számítógépen nyitva hagyni.
+
+            ### 🔒 Adatkezelés és Mentés
+            Minden adatot (e-mail, API kulcs, portfólió) a böngésző **LocalStorage** (helyi tároló) része őriz meg. Ez azt jelenti, hogy ha másik gépet vagy másik böngészőt használ, az adatok nem lesznek ott. 
+            **Tipp:** Használja az **Exportálás** funkciót a *Portfólióm* menüpont legalján, hogy biztonsági mentést készítsen vagy átvigye adatait egy másik eszközre!
+        """,
         'limit_placeholder': "USD érték",
         'toast_low': "🛑 beeett {low} USD alá!",
         'toast_high': "💰 elérte a {high} USD-t!",
@@ -132,6 +153,26 @@ translations = {
         'news_and_analysis': "**News & Analysis**",
         'request_news_toggle': "Request News",
         'email_label': "Email for Alerts:",
+        'about_usage_title': "📖 User Guide",
+        'about_usage_text': """
+            ### 🤖 Activating AI Features
+            To get the full experience, request a free **Groq API key** at [Groq Console](https://console.groq.com/) and paste it into the **AI Settings** field in the sidebar. This enables the Portfolio Assistant and instant News Analysis.
+
+            ### 🔔 Notifications and Updates
+            The app refreshes **stock prices every minute** and checks for **news every 30 minutes**.
+            
+            > **⚠️ CRITICAL NOTE:**
+            > Since the app does not store data on a central server, notifications **will only work if**:
+            > 1. The website is **kept open** in your browser.
+            > 2. Your computer remains **turned on**.
+            > 3. The **Auto-Refresh** feature is enabled.
+            
+            For the best reliability, it is recommended to run the app on a 24/7 server or a dedicated, always-on computer.
+
+            ### 🔒 Data and Backups
+            All settings (email, API keys, portfolio) are saved in your browser's **LocalStorage**. They will not be available on other devices or browsers. 
+            **Tip:** Use the **Export** function at the bottom of the *My Portfolio* menu to back up your data or transfer it to another device!
+        """,
         'email_placeholder': "example@email.com",
         'email_saved': "✅ Saved!",
         'email_error': "❌ Invalid format!",
@@ -193,23 +234,37 @@ st.set_page_config(page_title="Tőzsde Figyelő", page_icon="📈", layout="wide
 
 st.markdown("""
     <style>
-        /* 1. A fő tartály felső margójának csökkentése */
+        /* Alapesetben (mobilon) nincs nagy margó */
         .block-container {
-            padding-top: 3rem !important;
+            padding-top: 1rem !important;
             padding-bottom: 0rem !important;
-            padding-left: 5rem !important;
-            padding-right: 5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
         }
 
-        /* 2. Az első elem (title/header) feletti üres hely eltüntetése */
+        /* Ha a kijelző szélesebb, mint 800px (asztali gép), akkor jöhet a 5rem margó */
+        @media (min-width: 800px) {
+            .block-container {
+                padding-left: 5rem !important;
+                padding-right: 5rem !important;
+                padding-top: 2rem !important;
+            }
+        }
+
+        /* Az első elem feletti üres hely finomhangolása */
         [data-testid="stAppViewBlockContainer"] {
-            padding-top: 2rem !important;
+            padding-top: 1rem !important;
         }
 
-        /* 3. A korábbi sidebar-os javításaid maradjanak itt... */
+        /* Sidebar fejléc igazítása */
         [data-testid="stSidebarHeader"] {
             padding-top: 0.5rem !important;
             min-height: 2rem !important; 
+        }
+        
+        /* Metrikák (kártyák) mobilbarát méretezése */
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -252,6 +307,12 @@ saved_news_subs = localS.getItem("stored_news_subs") # ÚJ: Hír feliratkozások
 # --- SESSION STATE ELEJÉN ---
 if 'subscribed_alerts' not in st.session_state:
     st.session_state.subscribed_alerts = set()
+    
+if 'seen_news' not in st.session_state:
+    # Betöltjük a korábban már elküldött hírek azonosítóit
+    saved_seen_news = localS.getItem("stored_seen_news")
+    st.session_state.seen_news = set(saved_seen_news) if saved_seen_news else set()
+
 
 if 'sent_alerts' not in st.session_state:
     st.session_state.sent_alerts = {} # Formátum: {"AAPL_low": "2024-03-20"}
@@ -315,9 +376,14 @@ def search_stock(query):
 
 
 def send_email_alert(target_email, subject, body):
-    # Ezeket a Streamlit Secrets-be kell majd tenned!
+    # ELLENŐRZÉS: Vannak-e titkok beállítva?
+    if "EMAIL_USER" not in st.secrets or "EMAIL_PASSWORD" not in st.secrets:
+        st.error("❌ E-mail küldési hiba: Hiányzó API titkok (Secrets)!")
+        return False
+        
     sender_email = st.secrets["EMAIL_USER"]
     sender_password = st.secrets["EMAIL_PASSWORD"]
+    # ... a többi rész marad ugyanaz ...
     
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -485,11 +551,14 @@ def draw_stock_buttons(stock_list, key_prefix):
             st.session_state.selected_stock = symbol
             st.rerun()
 
-
 # ==========================================
 # --- 1.1 NYELVVÁLASZTÓ (Sidebar Teteje) ---
 # ==========================================
 # Két oszlopot csinálunk a bal oldali sávban, hogy a gombok egymás mellett legyenek
+
+st.sidebar.header("📈 Tőzsde Központ")
+
+
 lang_c1, lang_c2 = st.sidebar.columns(2)
 
 with lang_c1:
@@ -506,10 +575,76 @@ with lang_c2:
 st.sidebar.divider() # Egy vékony elválasztó vonal a gombok és a menü közé
 
 
+# --- GLOBÁLIS ÉRTESÍTÉSI RENDSZER (Minden oldalon fut) ---
+def run_global_alerts():
+    # Összegyűjtjük az összes olyan ticker-t, amire van bármilyen feliratkozás
+    all_watched = st.session_state.subscribed_alerts.union(st.session_state.subscribed_news)
+    
+    today_str = datetime.date.today().isoformat()
+    
+    for ticker_sym in all_watched:
+        # Adatok lekérése a figyeléshez (Cache-ből jön, ha friss)
+        price_data = get_live_price(ticker_sym)
+        if not price_data: continue
+        
+        curr_p = price_data['c']
+        alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
+        
+        # 1. ÁR RIASZTÁSOK ELLENŐRZÉSE
+        if ticker_sym in st.session_state.subscribed_alerts and st.session_state.user_email:
+            # Alsó limit
+            if 0 < float(alert_limits["low"]) > curr_p:
+                alert_key = f"{ticker_sym}_low"
+                if st.session_state.sent_alerts.get(alert_key) != today_str:
+                    if send_email_alert(st.session_state.user_email, f"⚠️ {ticker_sym} Stop-Loss!", f"Ár: {curr_p} USD"):
+                        st.session_state.sent_alerts[alert_key] = today_str
+            # Felső limit
+            if 0 < float(alert_limits["high"]) < curr_p:
+                alert_key = f"{ticker_sym}_high"
+                if st.session_state.sent_alerts.get(alert_key) != today_str:
+                    if send_email_alert(st.session_state.user_email, f"🚀 {ticker_sym} Célár!", f"Ár: {curr_p} USD"):
+                        st.session_state.sent_alerts[alert_key] = today_str
+
+        # 2. HÍR RIASZTÁSOK + AI ELEMZÉS
+        if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
+            news = get_stock_news(ticker_sym)
+            if news:
+                latest = news[0]
+                n_data = latest.get('content', latest)
+                n_uuid = latest.get('uuid') or n_data.get('url')
+                
+                if n_uuid not in st.session_state.get('seen_news', []):
+                    title = n_data.get('title', 'Új hír')
+                    summary = n_data.get('summary', '')
+                    # AI elemzés (ha van kulcs)
+                    analysis = analyze_news_with_groq(title, summary, ticker_sym, st.session_state.get('groq_api_key', '')) if st.session_state.get('groq_api_key') else "AI elemzés nem készült."
+                    
+                    body = f"Hír: {title}\nLink: {n_data.get('url')}\n\nAI Elemzés:\n{analysis}"
+                    if send_email_alert(st.session_state.user_email, f"📰 Új hír: {ticker_sym}", body):
+                        if 'seen_news' not in st.session_state: st.session_state.seen_news = set()
+                        st.session_state.seen_news.add(n_uuid)
+                        localS.setItem("stored_seen_news", list(st.session_state.seen_news))
+
+# Meghívjuk a figyelőt - ez minden oldalfrissítéskor lefut az összes részvényre!
+run_global_alerts()
+
+
 # --- 4. NAVIGÁCIÓ (FŐ ELÁGAZÁS) ---
 
-menu = st.sidebar.selectbox("Válassz menüpontot:", ["📈 Tőzsde Figyelő", "💰 Portfólióm","📚 Segédlet", "ℹ️ A programról"])
+menu = st.sidebar.selectbox("Válassz menüpontot:", ["📈 Tőzsde Figyelő", "💰 Portfólióm","📚 Befektetési kisokos", "ℹ️ A programról"])
+
+# --- AUTO REFRESH KAPCSOLÓ A SIDEBARON ---
 st.sidebar.divider()
+auto_refresh_enabled = st.sidebar.toggle(
+    "Automatikus frissítés (1 perc)",
+    value=False,
+    help="Ha bekapcsolod, az oldal percenként automatikusan újratölt. Ez szükséges ahhoz, hogy a program folyamatosan figyelje az árakat és a híreket, majd e-mailt küldjön neked, ha átlépik a limitet."
+)
+
+if auto_refresh_enabled:
+    from streamlit_autorefresh import st_autorefresh
+    # 60.000 miliszekundum = 1 perc
+    st_autorefresh(interval=60000, key="stock_watcher_refresh")
 
 # --- API KULCS BEKÉRÉSE GLOBÁLISAN ---
 with st.sidebar.expander("🔑 AI Beállítások (Ingyenes)"):
@@ -1002,6 +1137,7 @@ if menu == "💰 Portfólióm":
                 "price_alerts": st.session_state.price_alerts, # A konkrét USD értékek
                 "subscribed_news": list(st.session_state.subscribed_news), # Hír kapcsolók
                 "subscribed_alerts": list(st.session_state.subscribed_alerts), # Ár riasztás kapcsolók
+                "seen_news": list(st.session_state.seen_news),
                 "settings": {
                     "email": st.session_state.get('user_email', ''),
                     "groq_key": st.session_state.get('groq_api_key', '')
@@ -1018,42 +1154,45 @@ if menu == "💰 Portfólióm":
             )
 
     with col_imp:
-            st.write("**Importálás**")
-            uploaded_file = st.file_uploader("Biztonsági mentés visszatöltése", type=["json"])
-            
-            if uploaded_file is not None:
-                try:
-                    import_data = json.load(uploaded_file)
+        st.write("**Importálás**")
+        uploaded_file = st.file_uploader("Biztonsági mentés visszatöltése", type=["json"])
+        
+        if uploaded_file is not None:
+            try:
+                import_data = json.load(uploaded_file)
+                
+                if st.button("🔄 Minden adat felülírása és betöltése"):
+                    # 1. ADATOK BETÖLTÉSE A MEMÓRIÁBA (Session State)
+                    st.session_state.portfolio = import_data.get("portfolio", [])
+                    st.session_state.favorites = set(import_data.get("favorites", []))
+                    st.session_state.price_alerts = import_data.get("price_alerts", {})
+                    st.session_state.subscribed_news = set(import_data.get("subscribed_news", []))
+                    st.session_state.subscribed_alerts = set(import_data.get("subscribed_alerts", []))
                     
-                    if st.button("🔄 Minden adat felülírása és betöltése"):
-                        # 1. Alapadatok (Listák és szótárak)
-                        st.session_state.portfolio = import_data.get("portfolio", [])
-                        st.session_state.favorites = set(import_data.get("favorites", []))
-                        st.session_state.price_alerts = import_data.get("price_alerts", {})
-                        
-                        # 2. Új kapcsolók (Hírek és Riasztás feliratkozások)
-                        st.session_state.subscribed_news = set(import_data.get("subscribed_news", []))
-                        st.session_state.subscribed_alerts = set(import_data.get("subscribed_alerts", []))
-                        
-                        # 3. Globális beállítások
-                        settings = import_data.get("settings", {})
-                        st.session_state.user_email = settings.get("email", "")
-                        st.session_state.groq_api_key = settings.get("groq_key", "")
+                    settings = import_data.get("settings", {})
+                    st.session_state.user_email = settings.get("email", "")
+                    st.session_state.groq_api_key = settings.get("groq_key", "")
 
-                        # 4. Mentés a böngésző LocalStorage-ébe
-                        if 'localS' in globals():
-                            localS.setItem("stored_portfolio", st.session_state.portfolio)
-                            localS.setItem("stored_favorites", list(st.session_state.favorites))
-                            localS.setItem("stored_email", st.session_state.user_email)
-                            localS.setItem("stored_groq_key", st.session_state.groq_api_key)
-                            localS.setItem("stored_alerts", st.session_state.price_alerts)
-                            localS.setItem("stored_news_subs", list(st.session_state.subscribed_news))
-                            localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts))
+                    # 2. KRITIKUS LÉPÉS: Megjelöljük, hogy az adatok már be vannak töltve!
+                    # Ez akadályozza meg, hogy a kódod eleje felülírja őket a régivel.
+                    st.session_state.loaded_port = True
+                    st.session_state.loaded_fav = True
+                    st.session_state.loaded_news = True
+                    st.session_state.loaded_email = True
+                    st.session_state.loaded_alerts = True
+                    st.session_state.loaded_alert_subs = True
 
-                        st.success("✅ Minden adat és riasztási beállítás sikeresen betöltve!")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Hiba a fájl feldolgozása közben: {e}")
+                    # 3. KULCS ÜTKÖZÉS JAVÍTÁSA: 
+                    # Nem hívunk meg sok setItem-et egyszerre. 
+                    # Ehelyett csak egy sikeres üzenetet küldünk, és a rerun után 
+                    # az adatok már a memóriában lesznek. A böngészőbe mentés pedig
+                    # majd az első manuális változtatáskor (pl. kedvenc gomb) megtörténik.
+                    
+                    st.success("✅ Adatok betöltve a memóriába! Kérlek, frissíts egyet a mentés véglegesítéséhez.")
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"❌ Hiba a fájl feldolgozása közben: {e}")
 
     
 
@@ -1104,7 +1243,7 @@ elif menu == "ℹ️ A programról":
 
     st.divider()
 
-    # Jogi nyilatkozat kiemelve a lap alján
+     # Jogi nyilatkozat kiemelve a lap alján
     st.warning("""
     **⚠️ JOGI NYILATKOZAT / DISCLAIMER**
     
@@ -1113,7 +1252,13 @@ elif menu == "ℹ️ A programról":
     Az AI **nem helyettesíti a képesített pénzügyi szakembereket**, és az általa generált tartalom **semmilyen formában nem minősül befektetési, pénzügyi vagy adóügyi tanácsadásnak**. A tőzsdei befektetések kockázattal járnak, a döntéseket minden esetben saját felelősségedre, alapos tájékozódás után hozd meg!
     """)
 
-elif menu == "📚 Segédlet":
+    # --- ÚJ: HASZNÁLATI ÚTMUTATÓ SZEKCIÓ ---
+    st.header(translations[st.session_state.language]['about_usage_title'])
+    st.info(translations[st.session_state.language]['about_usage_text'])
+
+
+
+elif menu == "📚 Befektetési kisokos":
         st.title("📚 Befektetési Kisokos")
         st.write("Ezen az oldalon összegyűjtöttük a legfontosabb fogalmakat, hogy magabiztosabban mozoghass a tőzsdén.")
 
@@ -1186,7 +1331,6 @@ else:
     # ==========================================
     # TŐZSDE FIGYELŐ OLDAL (DASHBOARD)
     # ==========================================
-    st.sidebar.header("📈 Tőzsde Központ")
     # --- BAL OLDALI SÁV (Kereső és listák) ---
     st.sidebar.subheader("🔍 Keresés")
     search_query = st.sidebar.text_input("Írd be a nevet vagy kódot:", key="search_bar")
@@ -1218,6 +1362,8 @@ else:
     selected = st.session_state.selected_stock
     info = get_stock_details(selected)
     company_name = info.get('longName', selected)
+
+    currency = info.get('currency', 'USD')
 
     # 1. Callback a kedvencekhez (marad a régi)
     def toggle_favorite():
@@ -1280,7 +1426,7 @@ else:
     # --- IDŐTÁV ÉS GRAFIKON ---
     live_data = get_live_price(selected)
     current_price = live_data.get('c', 'N/A')
-    st.subheader(f"Aktuális ár: {current_price} USD")
+    st.subheader(f"Aktuális ár: {current_price} {currency}")
 
     # 1. Definiáljuk az opciókat
     period_options = {"5 Nap": "5d", "1 Hónap": "1mo", "1 Év": "1y", "5 Év": "5y", "Maximum": "max"}
@@ -1309,21 +1455,22 @@ else:
     hist_data = get_historical_data(selected, period_options[sel_label])
     
     if not hist_data.empty:
-        fig = px.line(hist_data, y='Close', labels={'Close': 'Árfolyam (USD)', 'index': 'Dátum'})
+        # JAVÍTVA: A grafikon függőleges tengelye is a megfelelő devizát mutatja
+        fig = px.line(hist_data, y='Close', labels={'Close': f'Árfolyam ({currency})', 'index': 'Dátum'})
         fig.update_layout(xaxis={'fixedrange': True}, yaxis={'fixedrange': True}, dragmode=False, hovermode="x unified")
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={'scrollZoom': False, 'displayModeBar': False},
-            key=f"chart_{selected}" # Egyedi kulcs minden részvényhez a villódzás elkerülésére
+            key=f"chart_{selected}"
         )
 
     st.divider()
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Market Cap", f"{info.get('marketCap', 0) / 1e9:.2f} Mrd USD")
+    col1.metric("Market Cap", f"{info.get('marketCap', 0) / 1e9:.2f} Mrd {currency}")
     col2.metric("P/E Ráta", info.get('trailingPE', 'N/A'))
-    col3.metric("52 Heti Max", f"{info.get('fiftyTwoWeekHigh', 'N/A')} USD")
+    col3.metric("52 Heti Max", f"{info.get('fiftyTwoWeekHigh', 'N/A')} {currency}")
 
     st.divider()
 
@@ -1395,28 +1542,28 @@ else:
 
         # 2. OSZLOP: Alsó limit
         with col_low:
-            st.write("**Alsó limit (Stop-Loss)**")
+            st.write(f"**Alsó limit (Stop-Loss)**")
             
             def update_low_limit():
                 st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
                 localS.setItem("stored_alerts", st.session_state.price_alerts)
 
             saved_low = st.session_state.price_alerts[selected]["low"]
+            
+            # JAVÍTVA: A felirat dinamikusan mutatja a devizát
             low_price = st.number_input(
-                "Szólj, ha ez alá esik (USD):", 
+                f"Szólj, ha ez alá esik ({currency}):", 
                 value=float(saved_low), 
                 step=1.0, 
                 key=f"low_{selected}",
                 on_change=update_low_limit
             )
             
-            # VIZUÁLIS CSÚSZKA (Alsó limithez)
+            # VIZUÁLIS CSÚSZKA
             if low_price > 0 and current_price != 'N/A':
-                # Kiszámoljuk, hány százalékra van az ár a limittől (0-100 skálán, ahol a 0 a limit)
                 dist_low = ((current_price - low_price) / current_price) * 100
-                dist_low = max(0, min(100, dist_low)) # Korlátozás 0 és 100 közé
-                
-                color = "#ff4b4b" if dist_low < 5 else "#ffa421" # Piros, ha nagyon közel van
+                dist_low = max(0, min(100, dist_low))
+                color = "#ff4b4b" if dist_low < 5 else "#ffa421"
                 
                 st.markdown(f"""
                     <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Távolság: {dist_low:.1f}%</div>
@@ -1427,28 +1574,28 @@ else:
 
         # 3. OSZLOP: Felső limit
         with col_high:
-            st.write("**Felső limit (Célár)**")
+            st.write(f"**Felső limit (Célár)**")
             
             def update_high_limit():
                 st.session_state.price_alerts[selected]["high"] = st.session_state[f"high_{selected}"]
                 localS.setItem("stored_alerts", st.session_state.price_alerts)
 
             saved_high = st.session_state.price_alerts[selected]["high"]
+            
+            # JAVÍTVA: A felirat itt is dinamikus
             high_price = st.number_input(
-                "Szólj, ha ez fölé megy (USD):", 
+                f"Szólj, ha e fölé megy ({currency}):", 
                 value=float(saved_high), 
                 step=1.0, 
                 key=f"high_{selected}",
                 on_change=update_high_limit
             )
 
-            # VIZUÁLIS CSÚSZKA (Felső limithez)
+            # VIZUÁLIS CSÚSZKA
             if high_price > 0 and current_price != 'N/A':
-                # Kiszámoljuk, hány százalékot tettünk meg a célár felé
                 progress_high = (current_price / high_price) * 100
                 progress_high = max(0, min(100, progress_high))
-                
-                color = "#2ecc71" if progress_high > 95 else "#3498db" # Zöld, ha majdnem elértük
+                color = "#2ecc71" if progress_high > 95 else "#3498db"
                 
                 st.markdown(f"""
                     <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Célár elérése: {progress_high:.1f}%</div>
@@ -1491,6 +1638,51 @@ else:
                 if send_email_alert(st.session_state.user_email, subject, body):
                     st.session_state.sent_alerts[alert_key_high] = today_str
                     st.toast("📧 Célár értesítés elküldve!", icon="📩")
+    
+    # --- HÍR RIASZTÁS AI ELEMZÉSSEL ---
+    if st.session_state.user_email and selected in st.session_state.subscribed_news:
+        news_items = get_stock_news(selected)
+        
+        # Csak a legfrissebb 2 hírt nézzük meg, hogy ne küldjön egyszerre túl sokat
+        for item in news_items[:2]:
+            news_data = item.get('content', item)
+            news_uuid = item.get('uuid') or news_data.get('url')
+            
+            # Ha ezt a hírt még nem küldtük el:
+            if news_uuid not in st.session_state.seen_news:
+                title = news_data.get('title', 'Új hír érkezett')
+                link = news_data.get('url') or news_data.get('link', '#')
+                summary_text = news_data.get('summary', '')
+
+                # 1. AI Elemzés generálása (ha van API kulcs)
+                ai_analysis = ""
+                if user_api_key:
+                    with st.spinner(f"AI elemzés készítése a hírről..."):
+                        ai_analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
+                
+                # 2. Email összeállítása
+                subject = f"📰 ÚJ HÍR + AI ELEMZÉS: {selected}"
+                
+                # HTML formátum a szép megjelenéshez (vagy sima szöveg)
+                body = f"""
+                Szia! 
+
+                Új hírt találtam a(z) {selected} részvényhez:
+                Cím: {title}
+                Link: {link}
+
+                --- 🤖 AI GYORSELEMZÉS ---
+                {ai_analysis if ai_analysis else "Az AI elemzés nem érhető el."}
+
+                Üdv, a Tőzsde Figyelőd
+                                """
+                                
+                # 3. Küldés
+                if send_email_alert(st.session_state.user_email, subject, body):
+                    # Elmentjük, hogy többször ne küldje el
+                    st.session_state.seen_news.add(news_uuid)
+                    localS.setItem("stored_seen_news", list(st.session_state.seen_news))
+                    st.toast(f"📰 Új hír elküldve AI elemzéssel!", icon="📧")
     
     st.divider()
 
