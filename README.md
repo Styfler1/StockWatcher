@@ -8,8 +8,7 @@ A modern, AI-powered stock tracking and portfolio management dashboard built wit
 ![Plotly](https://img.shields.io/badge/Plotly-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)
 
 ## 🌐 Live Demo
-**Try it instantly in your browser (No installation required):** 👉 [Click here to open StockWatcher!]([https://TE_STREAMLIT_LINKED_JÖN_IDE](https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app))
-
+**Try it instantly in your browser (No installation required):** 👉 [Click here to open StockWatcher!](https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app)
 ---
 
 ## ✨ Key Features
