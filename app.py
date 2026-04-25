@@ -611,34 +611,70 @@ st.sidebar.divider() # Egy vékony elválasztó vonal a gombok és a menü köz�
 
 
 # --- GLOBÁLIS ÉRTESÍTÉSI RENDSZER (Minden oldalon fut) ---
+# --- GLOBÁLIS ÉRTESÍTÉSI RENDSZER (Minden oldalon fut) ---
 def run_global_alerts():
     # Összegyűjtjük az összes olyan ticker-t, amire van bármilyen feliratkozás
     all_watched = st.session_state.subscribed_alerts.union(st.session_state.subscribed_news)
-    
     today_str = datetime.date.today().isoformat()
     
+    # Közös lábléc és AI kulcs
+    unsubscribe_footer = (
+        "\n\n---\n"
+        "Amennyiben nem szeretne többet hasonló értesítéseket kapni, "
+        "látogasson el a https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app oldalra."
+    )
+    global_api_key = st.session_state.get('groq_api_key', '')
+
     for ticker_sym in all_watched:
-        # Adatok lekérése a figyeléshez (Cache-ből jön, ha friss)
+        # Adatok lekérése a figyeléshez
         price_data = get_live_price(ticker_sym)
         if not price_data: continue
         
         curr_p = price_data['c']
         alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
         
+        # A deviza meghatározása (hogy ne csak USD legyen)
+        # Megjegyzés: itt egy gyors Ticker hívást csinálunk, amit a cache remélhetőleg kezel
+        try:
+            ticker_info = get_stock_details(ticker_sym)
+            curr_symbol = ticker_info.get('currency', 'USD')
+        except:
+            curr_symbol = 'USD'
+
         # 1. ÁR RIASZTÁSOK ELLENŐRZÉSE
         if ticker_sym in st.session_state.subscribed_alerts and st.session_state.user_email:
-            # Alsó limit
-            if 0 < float(alert_limits["low"]) > curr_p:
+            low_l = float(alert_limits["low"])
+            high_l = float(alert_limits["high"])
+
+            # --- ALSÓ LIMIT ---
+            if low_l > 0 and curr_p < low_l:
                 alert_key = f"{ticker_sym}_low"
                 if st.session_state.sent_alerts.get(alert_key) != today_str:
-                    if send_email_alert(st.session_state.user_email, f"⚠️ {ticker_sym} Stop-Loss!", f"Ár: {curr_p} USD"):
+                    subject = f"⚠️ STOP-LOSS: {ticker_sym} beesett!"
+                    body = (
+                        f"Szia!\n\n"
+                        f"A(z) {ticker_sym} árfolyama jelenleg {curr_p} {curr_symbol}, "
+                        f"amely beesett a beállított {low_l} {curr_symbol} limit alá."
+                        f"{unsubscribe_footer}"
+                    )
+                    if send_email_alert(st.session_state.user_email, subject, body):
                         st.session_state.sent_alerts[alert_key] = today_str
-            # Felső limit
-            if 0 < float(alert_limits["high"]) < curr_p:
+                        st.toast(f"📧 Stop-loss riasztás elküldve ({ticker_sym})!", icon="📩")
+
+            # --- FELSŐ LIMIT ---
+            if high_l > 0 and curr_p > high_l:
                 alert_key = f"{ticker_sym}_high"
                 if st.session_state.sent_alerts.get(alert_key) != today_str:
-                    if send_email_alert(st.session_state.user_email, f"🚀 {ticker_sym} Célár!", f"Ár: {curr_p} USD"):
+                    subject = f"🚀 CÉLÁR: {ticker_sym} elérve!"
+                    body = (
+                        f"Szia!\n\n"
+                        f"A(z) {ticker_sym} árfolyama elérte a {curr_p} {curr_symbol} értéket, "
+                        f"így teljesült a {high_l} {curr_symbol} célárad."
+                        f"{unsubscribe_footer}"
+                    )
+                    if send_email_alert(st.session_state.user_email, subject, body):
                         st.session_state.sent_alerts[alert_key] = today_str
+                        st.toast(f"📧 Célár értesítés elküldve ({ticker_sym})!", icon="📩")
 
         # 2. HÍR RIASZTÁSOK + AI ELEMZÉS
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
@@ -650,17 +686,37 @@ def run_global_alerts():
                 
                 if n_uuid not in st.session_state.get('seen_news', []):
                     title = n_data.get('title', 'Új hír')
+                    link = n_data.get('url') or n_data.get('link', '#')
                     summary = n_data.get('summary', '')
-                    # AI elemzés (ha van kulcs)
-                    analysis = analyze_news_with_groq(title, summary, ticker_sym, st.session_state.get('groq_api_key', '')) if st.session_state.get('groq_api_key') else "AI elemzés nem készült."
+
+                    # AI Elemzés generálása
+                    ai_analysis = ""
+                    if global_api_key:
+                        ai_result = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
+                        if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
+                            ai_analysis = ai_result
+
+                    # Email összeállítása
+                    subject = f"📰 ÚJ HÍR + AI ELEMZÉS: {ticker_sym}"
+                    body = f"Szia!\n\n"
+                    body += f"Új hírt találtam a(z) {ticker_sym} részvényhez:\n"
+                    body += f"Cím: {title}\n"
+                    body += f"Link: {link}\n\n"
                     
-                    body = f"Hír: {title}\nLink: {n_data.get('url')}\n\nAI Elemzés:\n{analysis}"
-                    if send_email_alert(st.session_state.user_email, f"📰 Új hír: {ticker_sym}", body):
+                    if ai_analysis:
+                        body += f"--- 🤖 AI GYORSELEMZÉS ---\n{ai_analysis}\n"
+                    else:
+                        body += "*(Ehhez a hírhez jelenleg nem készült AI elemzés - ellenőrizze az API kulcsot!)*\n"
+                    
+                    body += unsubscribe_footer
+                    
+                    if send_email_alert(st.session_state.user_email, subject, body):
                         if 'seen_news' not in st.session_state: st.session_state.seen_news = set()
                         st.session_state.seen_news.add(n_uuid)
-                        localS.setItem("stored_seen_news", list(st.session_state.seen_news))
+                        localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_uuid_{ticker_sym}")
+                        st.toast(f"📧 Hír elküldve AI elemzéssel ({ticker_sym})!", icon="📩")
 
-# Meghívjuk a figyelőt - ez minden oldalfrissítéskor lefut az összes részvényre!
+# Ne felejtsd el meghívni a navigáció közelében:
 run_global_alerts()
 
 
