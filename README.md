@@ -7,6 +7,11 @@ A modern, AI-powered stock tracking and portfolio management dashboard built wit
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
 ![Plotly](https://img.shields.io/badge/Plotly-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)
 
+## 🌐 Live Demo
+**Try it instantly in your browser (No installation required):** 👉 [Click here to open StockWatcher!]([https://TE_STREAMLIT_LINKED_JÖN_IDE](https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app))
+
+---
+
 ## ✨ Key Features
 
 * 📊 **Real-Time Dashboard:** Search and track global stocks, view historical data with interactive Plotly charts, and monitor market sentiment.
@@ -25,7 +30,10 @@ A modern, AI-powered stock tracking and portfolio management dashboard built wit
 * **Storage:** `streamlit-local-storage`
 * **Notifications:** Built-in Python `smtplib`
 
-## 🚀 Installation & Setup
+---
+
+## 🚀 Installation & Setup (For Local Run)
+*If you want to run the application locally on your own machine for better privacy and to avoid Yahoo Finance rate limits:*
 
 ### 1. Clone the repository
 ```bash
