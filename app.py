@@ -1647,78 +1647,94 @@ else:
         st.toast(f"🚀 {selected} elérte a {high_price} USD-t!", icon="💰")
 
 
-        # --- RIASZTÁSI LOGIKA INDÍTÁSA ---
-    # Ez a rész már a konténeren kívül van, de a változókat ismeri!
-    
+    # --- RIASZTÁSI LOGIKA INDÍTÁSA ---
     today_str = datetime.date.today().isoformat()
+    
+    # Közös lábléc minden e-mailhez
+    unsubscribe_footer = (
+        "\n\n---\n"
+        "Amennyiben nem szeretne többet hasonló értesítéseket kapni, "
+        "látogasson el a https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app oldalra."
+    )
 
-    # Csak akkor fut le, ha van megadott email és be van kapcsolva a riasztás erre a részvényre
+    # Biztosítjuk, hogy az AI kulcsot a session_state-ből vegyük (hogy globálisan elérhető legyen)
+    global_api_key = st.session_state.get('groq_api_key', '')
+
+    # 1. ÁRRIASZTÁSOK
     if st.session_state.user_email and selected in st.session_state.subscribed_alerts:
         
         # ALSÓ LIMIT (Stop-Loss)
         alert_key_low = f"{selected}_low"
         if low_price > 0 and current_price != 'N/A' and current_price < low_price:
             if st.session_state.sent_alerts.get(alert_key_low) != today_str:
-                subject = f"⚠️ STOP-LOSS: {selected} beesett!"
-                body = f"Szia!\n\nA(z) {selected} árfolyama {current_price} USD, ami a {low_price} USD limited alatt van."
+                subject = f"⚠️ STOP-LOSS {selected} beesett!"
+                body = (
+                    f"Szia!\n\n"
+                    f"A(z) {selected} árfolyama jelenleg {current_price} {currency}, "
+                    f"amely beesett a beállított {low_price} {currency} limit alá."
+                    f"{unsubscribe_footer}"
+                )
                 if send_email_alert(st.session_state.user_email, subject, body):
                     st.session_state.sent_alerts[alert_key_low] = today_str
-                    st.toast("📧 Riasztási e-mail elküldve!", icon="📩")
+                    st.toast(f"📧 Stop-loss riasztás elküldve!", icon="📩")
 
         # FELSŐ LIMIT (Célár)
         alert_key_high = f"{selected}_high"
         if high_price > 0 and current_price != 'N/A' and current_price > high_price:
             if st.session_state.sent_alerts.get(alert_key_high) != today_str:
                 subject = f"🚀 CÉLÁR: {selected} elérve!"
-                body = f"Szia!\n\nA(z) {selected} árfolyama {current_price} USD, elérte a {high_price} USD céláradat."
+                body = (
+                    f"Szia!\n\n"
+                    f"A(z) {selected} árfolyama elérte a {current_price} {currency} értéket, "
+                    f"így teljesült a {high_price} {currency} célárad."
+                    f"{unsubscribe_footer}"
+                )
                 if send_email_alert(st.session_state.user_email, subject, body):
                     st.session_state.sent_alerts[alert_key_high] = today_str
-                    st.toast("📧 Célár értesítés elküldve!", icon="📩")
-    
-    # --- HÍR RIASZTÁS AI ELEMZÉSSEL ---
+                    st.toast(f"📧 Célár értesítés elküldve!", icon="📩")
+
+    # 2. HÍR RIASZTÁS AI ELEMZÉSSEL
     if st.session_state.user_email and selected in st.session_state.subscribed_news:
         news_items = get_stock_news(selected)
         
-        # Csak a legfrissebb 2 hírt nézzük meg, hogy ne küldjön egyszerre túl sokat
         for item in news_items[:2]:
             news_data = item.get('content', item)
             news_uuid = item.get('uuid') or news_data.get('url')
             
-            # Ha ezt a hírt még nem küldtük el:
             if news_uuid not in st.session_state.seen_news:
                 title = news_data.get('title', 'Új hír érkezett')
                 link = news_data.get('url') or news_data.get('link', '#')
                 summary_text = news_data.get('summary', '')
 
-                # 1. AI Elemzés generálása (ha van API kulcs)
+                # AI Elemzés kérése a globális kulccsal
                 ai_analysis = ""
-                if user_api_key:
-                    with st.spinner(f"AI elemzés készítése a hírről..."):
-                        ai_analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
-                
-                # 2. Email összeállítása
+                if global_api_key:
+                    # Megpróbáljuk az elemzést
+                    ai_result = analyze_news_with_groq(title, summary_text, selected, global_api_key)
+                    # Csak akkor használjuk, ha nem hibaüzenetet kaptunk vissza
+                    if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
+                        ai_analysis = ai_result
+
+                # Email összeállítása az új formátumban
                 subject = f"📰 ÚJ HÍR + AI ELEMZÉS: {selected}"
                 
-                # HTML formátum a szép megjelenéshez (vagy sima szöveg)
-                body = f"""
-                Szia! 
-
-                Új hírt találtam a(z) {selected} részvényhez:
-                Cím: {title}
-                Link: {link}
-
-                --- 🤖 AI GYORSELEMZÉS ---
-                {ai_analysis if ai_analysis else "Az AI elemzés nem érhető el."}
-
-                Üdv, a Tőzsde Figyelőd
-                                """
+                body = f"Szia!\n\n"
+                body += f"Új hírt találtam a(z) {selected} részvényhez:\n"
+                body += f"Cím: {title}\n"
+                body += f"Link: {link}\n\n"
+                
+                if ai_analysis:
+                    body += f"--- 🤖 AI GYORSELEMZÉS ---\n"
+                    body += f"{ai_analysis}\n"
+                else:
+                    body += "*(Ehhez a hírhez jelenleg nem készült AI elemzés - ellenőrizze az API kulcsot!)*\n"
+                
+                body += f"{unsubscribe_footer}"
                                 
-                # 3. Küldés
                 if send_email_alert(st.session_state.user_email, subject, body):
-                    # Elmentjük, hogy többször ne küldje el
                     st.session_state.seen_news.add(news_uuid)
                     localS.setItem("stored_seen_news", list(st.session_state.seen_news))
-                    st.toast(f"📰 Új hír elküldve AI elemzéssel!", icon="📧")
+                    st.toast(f"📧 Hír elküldve AI elemzéssel!", icon="📩")
     
     st.divider()
 
@@ -1736,7 +1752,7 @@ else:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-    if prompt := st.chat_input(f"Kérj véleményt a(z) {selected} részvényről..."):
+    if prompt := st.text_input(f"Kérj véleményt a(z) {selected} részvényről..."):
         # 1. Felhasználó üzenetének mentése és kirajzolása
         st.session_state[chat_key].append({"role": "user", "content": prompt})
         with chat_container:
