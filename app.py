@@ -389,8 +389,12 @@ def run_global_alerts():
         "visit https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app."
     )
     global_api_key = st.session_state.get('groq_api_key', '')
+    
     if not global_api_key:
-            global_api_key = localS.getItem("stored_groq_key") or ""
+        saved_key = localS.getItem("stored_groq_key")
+        if saved_key:
+            global_api_key = saved_key
+            st.session_state.groq_api_key = saved_key
 
     for ticker_sym in all_watched:
         price_data = get_live_price(ticker_sym)
