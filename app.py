@@ -91,6 +91,7 @@ saved_favorites = localS.getItem("stored_favorites")
 saved_email = localS.getItem("stored_email")
 saved_alerts = localS.getItem("stored_alerts")
 saved_news_subs = localS.getItem("stored_news_subs")
+saved_groq_key = localS.getItem("stored_groq_key")
 
 
 
@@ -98,6 +99,9 @@ saved_news_subs = localS.getItem("stored_news_subs")
 
 if 'subscribed_alerts' not in st.session_state:
     st.session_state.subscribed_alerts = set()
+
+if saved_groq_key and 'groq_api_key' not in st.session_state:
+    st.session_state.groq_api_key = saved_groq_key
     
 if 'seen_news' not in st.session_state:
     saved_seen_news = localS.getItem("stored_seen_news")
@@ -385,6 +389,8 @@ def run_global_alerts():
         "visit https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app."
     )
     global_api_key = st.session_state.get('groq_api_key', '')
+    if not global_api_key:
+            global_api_key = localS.getItem("stored_groq_key") or ""
 
     for ticker_sym in all_watched:
         price_data = get_live_price(ticker_sym)
