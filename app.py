@@ -332,7 +332,7 @@ def get_historical_data(symbol, period):
     ticker = yf.Ticker(symbol)
     return ticker.history(period=period)
 
-@st.cache_data(ttl=1800) 
+@st.cache_data(ttl=300) 
 def get_stock_news(symbol):
     ticker = yf.Ticker(symbol)
     return ticker.news
@@ -1428,43 +1428,6 @@ else:
                     st.session_state.sent_alerts[alert_key_high] = today_str
                     st.toast(f"📧 Target price alert sent!", icon="📩")
 
-    if st.session_state.user_email and selected in st.session_state.subscribed_news:
-        news_items = get_stock_news(selected)
-        
-        for item in news_items[:2]:
-            news_data = item.get('content', item)
-            news_uuid = item.get('uuid') or news_data.get('url')
-            
-            if news_uuid not in st.session_state.seen_news:
-                title = news_data.get('title', 'Recent news just dropped')
-                link = news_data.get('url') or news_data.get('link', '#')
-                summary_text = news_data.get('summary', '')
-
-                ai_analysis = ""
-                if global_api_key:
-                    ai_result = analyze_news_with_groq(title, summary_text, selected, global_api_key)
-                    if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
-                        ai_analysis = ai_result
-
-                subject = f"📰 RECENT NEWS + AI ANALYSIS: {selected}"
-                
-                body = f"Greetings!\n\n"
-                body += f"I found news for {selected} stock:\n"
-                body += f"Title: {title}\n"
-                body += f"Link: {link}\n\n"
-                
-                if ai_analysis:
-                    body += f"--- 🤖 AI QUICK ANALYSIS ---\n"
-                    body += f"{ai_analysis}\n"
-                else:
-                    body += "*(There is currently no AI analysis for this news - check the API key!)*\n"
-                
-                body += f"{unsubscribe_footer}"
-                                
-                if send_email_alert(st.session_state.user_email, subject, body):
-                    st.session_state.seen_news.add(news_uuid)
-                    localS.setItem("stored_seen_news", list(st.session_state.seen_news))
-                    st.toast(f"📧 News sent with AI analysis!", icon="📩")
     
     st.divider()
 
