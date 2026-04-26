@@ -444,39 +444,50 @@ def run_global_alerts():
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             news = get_stock_news(ticker_sym)
             if news:
-                latest = news[0]
-                n_data = latest.get('content', latest)
-                n_uuid = latest.get('uuid') or n_data.get('url')
+                emails_sent_now = 0  # Számláló, hogy ne küldjön 50 emailt egyszerre
                 
-                if n_uuid not in st.session_state.get('seen_news', []):
-                    title = n_data.get('title', 'Új hír')
-                    link = n_data.get('url') or n_data.get('link', '#')
-                    summary = n_data.get('summary', '')
+                # Végignézzük a legfelső 5 hírt, hátha a legelső egy régi "kitűzött" cikk
+                for item in news[:5]:
+                    if emails_sent_now >= 2:
+                        break  # Maximum 2 hír-emailt küldünk egy perc alatt
+                        
+                    n_data = item.get('content', item)
+                    n_uuid = item.get('uuid') or n_data.get('url')
+                    
+                    # Ha van UUID-je, és még NEM láttuk korábban:
+                    if n_uuid and n_uuid not in st.session_state.seen_news:
+                        title = n_data.get('title', 'New news')
+                        link = n_data.get('url') or n_data.get('link', '#')
+                        summary = n_data.get('summary', '')
 
-                    ai_analysis = ""
-                    if global_api_key:
-                        ai_result = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
-                        if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
-                            ai_analysis = ai_result
+                        ai_analysis = ""
+                        if global_api_key:
+                            ai_result = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
+                            if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
+                                ai_analysis = ai_result
 
-                    subject = f"📰 News + AI analysis: {ticker_sym}"
-                    body = f"Greetings!\n\n"
-                    body += f"I found news for {ticker_sym} stock:\n"
-                    body += f"Title: {title}\n"
-                    body += f"Link: {link}\n\n"
-                    
-                    if ai_analysis:
-                        body += f"--- 🤖 QUICK AI ANALYSIS ---\n{ai_analysis}\n"
-                    else:
-                        body += "*(There is currently no AI analysis for this news - check your API key!)*\n"
-                    
-                    body += unsubscribe_footer
-                    
-                    if send_email_alert(st.session_state.user_email, subject, body):
-                        if 'seen_news' not in st.session_state: st.session_state.seen_news = set()
-                        st.session_state.seen_news.add(n_uuid)
-                        localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_uuid_{ticker_sym}")
-                        st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
+                        subject = f"📰 News + AI analysis: {ticker_sym}"
+                        body = f"Greetings!\n\n"
+                        body += f"I found news for {ticker_sym} stock:\n"
+                        body += f"Title: {title}\n"
+                        body += f"Link: {link}\n\n"
+                        
+                        if ai_analysis:
+                            body += f"--- 🤖 QUICK AI ANALYSIS ---\n{ai_analysis}\n"
+                        else:
+                            body += "*(There is currently no AI analysis for this news - check your API key!)*\n"
+                        
+                        body += unsubscribe_footer
+                        
+                        # KÜLDÉS ÉS MENTÉS
+                        if send_email_alert(st.session_state.user_email, subject, body):
+                            st.session_state.seen_news.add(n_uuid)
+                            
+                            # FIGYELEM: Egyedi kulcs a mentéshez (emails_sent_now), hogy ne omoljon össze a Streamlit DuplicateElement hibával!
+                            localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_{ticker_sym}_{emails_sent_now}")
+                            
+                            st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
+                            emails_sent_now += 1
 
 run_global_alerts()
 
