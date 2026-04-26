@@ -1324,7 +1324,10 @@ else:
             if email_input != st.session_state.user_email:
                 if is_valid_email(email_input) or email_input == "":
                     st.session_state.user_email = email_input
-                    localS.setItem("stored_email", email_input) 
+                    
+                    localS.setItem("stored_email", email_input, key=f"save_email_{selected}") 
+                    # ----------------------------------------
+                    
                     if email_input: st.success("✅ Saved!")
                 else:
                     st.error("❌ Invalid format!")
