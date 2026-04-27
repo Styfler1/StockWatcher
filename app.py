@@ -647,7 +647,7 @@ if menu == "💰 My Portfolio":
         # Stock buy/sell
     
 
-    with st.expander("📦 Add other asset (Real estate, Wine, etc.)"):
+    with st.expander("📦 Add other asset (Real estate, Wine, Jewelry etc.)"):
         st.write("Add alternative investments that are not tracked on the stock market.")
         custom_name = st.text_input("Name of the asset (e.g. Miami Apartment, Vintage Rolex):")
         custom_category = st.selectbox("Category:", ["Real Estate", "Wine", "Jewelry", "Art", "Vehicle", "Crypto (Offline)", "Other"])
@@ -671,7 +671,7 @@ if menu == "💰 My Portfolio":
                 st.rerun()
             else:
                 st.warning("Please provide a name, and ensure quantity and price are greater than 0.")
-                
+
     
     
     with st.expander("➖ Sale (Full or Partial)"):
@@ -719,296 +719,92 @@ if menu == "💰 My Portfolio":
 
     else:
         portfolio_data = []
-        total_invested_usd = 0
-        current_total_value_usd = 0
-        total_annual_dividend_usd = 0  
         
+        s_invested, s_current, s_div = 0, 0, 0
         
+        total_invested, total_current = 0, 0
+
+        allocation_data = []
+
         for item in st.session_state.portfolio:
+            is_custom = item.get('is_custom', False)
+            symbol = item['symbol']
+            qty = item['qty']
+            buy_p = item['buy_price']
+            
+            if is_custom:
+                category = item.get('custom_category', 'Other')
+                current_p = buy_p
+                currency = "USD"
+                sector = "Alternative Assets"
+                exchange_rate = 1.0
+                div_native = 0
+            else:
+                info, hist = get_cached_ticker_data(symbol)
+                currency = info.get('currency', 'USD')
+                current_p = hist['Close'].iloc[-1] if not hist.empty else buy_p
+                sector = info.get('sector', 'Other')
+                
+                if "-USD" in symbol or "-EUR" in symbol:
+                    category = "Crypto"
+                elif "=X" in symbol:
+                    category = "Currency"
+                else:
+                    category = "Stocks"
+                
+                div_yield = info.get('dividendYield', 0)
+                if div_yield is None: div_yield = 0
+                elif div_yield > 0.2: div_yield /= 100
+                div_native = (current_p * qty) * div_yield
+                
+                exchange_rate = get_exchange_rate(currency, "USD")
 
-            if item.get('is_custom'):
-                continue
+            inv_usd = (buy_p * qty) * exchange_rate
+            cur_usd = (current_p * qty) * exchange_rate
+            div_usd = div_native * exchange_rate
 
-            info, hist = get_cached_ticker_data(item['symbol'])
-            
-            currency = info.get('currency', 'USD')
-            current_price = hist['Close'].iloc[-1] if not hist.empty else item['buy_price']
-            sector = info.get('sector', 'Information Technology')
-            
-            div_yield = info.get('dividendYield', 0)
-            if div_yield is None: 
-                div_yield = 0
-            elif div_yield > 0.2:
-                div_yield /= 100
-            
-            annual_div_native = (current_price * item['qty']) * div_yield
+            total_invested += inv_usd
+            total_current += cur_usd
 
-            invested_native = item['buy_price'] * item['qty']
-            current_value_native = current_price * item['qty']
-            p_l_native = current_value_native - invested_native
-            
-            exchange_rate = get_exchange_rate(currency, "USD")
-            
-            invested_usd = invested_native * exchange_rate
-            current_value_usd = current_value_native * exchange_rate
-            annual_div_usd = annual_div_native * exchange_rate
-            # ------------------------------------
-            
-            total_invested_usd += invested_usd
-            current_total_value_usd += current_value_usd
-            total_annual_dividend_usd += annual_div_usd
-            
+            if not is_custom and category == "Stocks":
+                s_invested += inv_usd
+                s_current += cur_usd
+                s_div += div_usd
+
             portfolio_data.append({
-                'Share': item['symbol'],
+                'Share': symbol,
+                'Category': category,
                 'Currency': currency,
-                'Invested': invested_native,
-                'Current value': current_value_native,
-                'Profit/Loss': p_l_native,
+                'Invested': buy_p * qty,
+                'Current value': current_p * qty,
+                'Profit/Loss': (current_p - buy_p) * qty,
                 'Sector': sector,
-                'Dividend (Annual)': annual_div_native,
-                'Current value (USD)': current_value_usd, 
-                'Invested (USD)': invested_usd
+                'Dividend (Annual)': div_native,
+                'Current value (USD)': cur_usd, 
+                'Invested (USD)': inv_usd
             })
 
         df_portfolio = pd.DataFrame(portfolio_data)
 
-        p_l_total = current_total_value_usd - total_invested_usd
-        p_l_percent = (p_l_total / total_invested_usd) * 100 if total_invested_usd > 0 else 0
-
+        st.subheader("📈 Stocks Only Performance")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Investment", f"{total_invested_usd:.2f} $")
-        c2.metric("Current value", f"{current_total_value_usd:.2f} $")
-        c3.metric("Profit/Loss", f"{p_l_total:.2f} $", f"{p_l_percent:.2f}%")
-        c4.metric("Expected annual dividend", f"{total_annual_dividend_usd:.2f} $")
+        p_l_s = s_current - s_invested
+        p_l_s_p = (p_l_s / s_invested * 100) if s_invested > 0 else 0
+        c1.metric("Stock Investment", f"{s_invested:,.2f} $")
+        c2.metric("Stock Value", f"{s_current:,.2f} $")
+        c3.metric("Stock P/L", f"{p_l_s:,.2f} $", f"{p_l_s_p:.2f}%")
+        c4.metric("Stock Dividend", f"{s_div:,.2f} $")
+
+        st.subheader("🌍 Total Portfolio (All Assets)")
+        t1, t2, t3, t4 = st.columns(4)
+        p_l_t = total_current - total_invested
+        p_l_t_p = (p_l_t / total_invested * 100) if total_invested > 0 else 0
+        t1.metric("Total Investment", f"{total_invested:,.2f} $")
+        t2.metric("Total Net Worth", f"{total_current:,.2f} $")
+        t3.metric("Total P/L", f"{p_l_t:,.2f} $", f"{p_l_t_p:.2f}%")
+        t4.metric("Assets Count", f"{len(df_portfolio)} items")
 
         st.divider()
-
-        all_sectors = [
-            "Information Technology", "Health Care", "Financials", "Consumer Discretionary", 
-            "Communication Services", "Industrials", "Consumer Staples", "Energy", 
-            "Utilities", "Real Estate", "Materials"
-        ]
-
-        sector_distribution = df_portfolio.groupby('Sector')['Current value (USD)'].sum() / current_total_value_usd  
-
-        for sector, weight in sector_distribution.items():
-            if weight > 0.6:
-                st.warning(f"⚠️ **The portfolio is not diversified enough!** Too much ({weight:.1%}) comes from the **{sector}** sector.")
-
-        portfolio_sectors = df_portfolio['Sector'].unique()
-        missing_sectors = [s for s in all_sectors if s not in portfolio_sectors]
-
-        if len(missing_sectors) > 5:
-                st.warning(f"⚠️ **Warning!** The portfolio is missing several key sectors (e.g. {', '.join(missing_sectors[:3])}).")
-
-
-        col_pie1, col_pie2 = st.columns(2)
-        
-        with col_pie1:
-            st.write("### 🥧 Distribution of shares")
-            fig_stock = px.pie(df_portfolio, values='Current value (USD)', names='Share', hole=0.4)
-            fig_stock.update_traces(textinfo='percent+label')
-            st.plotly_chart(fig_stock, use_container_width=True)
-            
-        with col_pie2:
-            st.write("### 🏢 Share by sector")
-            fig_sector = px.pie(df_portfolio, values='Current value (USD)', names='Sector', hole=0.4)
-            fig_sector.update_traces(textinfo='percent+label')
-            st.plotly_chart(fig_sector, use_container_width=True)
-
-        st.divider()
-
-        
-
-        st.write("### 📊 Portfolio Performance (Total and Per Share)")
-
-        
-        df_total = pd.DataFrame({
-            'Share': ['All'],
-            'Invested (USD)': [total_invested_usd],
-            'Current value (USD)': [current_total_value_usd],
-            'Sector': ['All']
-        })
-
-        df_plot = pd.concat([df_total, df_portfolio.sort_values('Current value (USD)', ascending=False)], ignore_index=True)
-
-        df_melted = df_plot.melt(
-            id_vars='Share', 
-            value_vars=['Invested (USD)', 'Current value (USD)'], 
-            var_name='Type', 
-            value_name='Amount (USD)'
-        )
-
-        fig_bar = px.bar(
-            df_melted, 
-            x='Share', 
-            y='Amount (USD)', 
-            color='Type', 
-            barmode='group',
-            color_discrete_map={'Invested (USD)': '#6c757d', 'Current value (USD)': '#28a745'},
-            text_auto='.2f' 
-        )
-
-        fig_bar.update_layout(
-            bargap=0.35,
-            bargroupgap=0.1,
-            xaxis={'fixedrange': True}, 
-            yaxis={'fixedrange': True}, 
-            dragmode=False,
-            uniformtext_minsize=8, 
-            uniformtext_mode='hide',
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-
-
-        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
-
-
-
-        # Table
-        with st.expander("📝 Detailed data table (In original currency)"):
-            display_columns = ['Share', 'Currency', 'Invested', 'Current value', 'Profit/Loss', 'Sector']
-            st.dataframe(df_portfolio[display_columns].style.format({
-                'Invested': '{:.2f}', 
-                'Current value': '{:.2f}', 
-                'Profit/Loss': '{:.2f}'
-            }), use_container_width=True)
-
-
-        with st.expander("💰 Detailed Dividend Analysis"):
-            st.write("The following amounts are estimated annual payments in their respective currencies:")
-            
-
-            df_div_display = df_portfolio[['Share', 'Currency', 'Dividend (Annual)', 'Sector']]
-            
-            st.dataframe(df_div_display.style.format({
-                'Dividend (Annual)': '{:.2f}'
-            }), use_container_width=True, hide_index=True)
-            
-
-            st.caption("Note: 'Accumulating' ETFs (like VUAA) show a value of 0.00 as they do not pay you directly.")
-
-        if total_annual_dividend_usd > 0:
-                st.write("### 🏆 Your largest dividend payers")
-                fig_div = px.bar(
-                    df_portfolio[df_portfolio['Dividend (Annual)'] > 0], 
-                    x='Share', 
-                    y='Dividend (Annual)',
-                    color='Share',
-                    text_auto='.2f',
-                    title="Annual Dividend Per Share (In Original Currency)"
-                )
-                st.plotly_chart(fig_div, use_container_width=True, key="div_bar_chart")
-
-        
-        #Portfolio AI analysis
-        st.divider()
-        st.subheader("🤖 Portfolio Manager Assistant")
-        st.info("Ask questions about your portfolio! For example: 'How risky is this composition?' or 'What other sectors do you recommend adding?'")
-
-        port_chat_key = "messages_portfolio_main"
-        if port_chat_key not in st.session_state:
-            st.session_state[port_chat_key] = [{"role": "assistant", "content": "Hi! I'm your AI Portfolio Manager. I've reviewed your information above. How can I help you with your portfolio?"}]
-
-        port_chat_container = st.container(height=400, border=True)
-        with port_chat_container:
-            for message in st.session_state[port_chat_key]:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-        if prompt := st.text_input("Ask for feedback on your portfolio..."):
-            st.session_state[port_chat_key].append({"role": "user", "content": prompt})
-            
-            with port_chat_container:
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-                    
-            with port_chat_container:
-                with st.chat_message("assistant"):
-                    if not user_api_key:
-                        st.error("❌ Please enter your Groq API key in the left sidebar to chat!")
-                    else:
-                        with st.spinner("Portfolio analysis in progress..."):
-                            try:
-                                portfolio_context = ""
-                                for p_item in portfolio_data:
-                                    portfolio_context += f"- {p_item['Share']}: {p_item['Current value (USD)']:.2f} USD value ({p_item['Sector']} sector)\n"
-                                
-                                system_prompt = {
-                                    "role": "system", 
-                                    "content": f"""You are a professional financial analyst and portfolio manager. 
-                                    The user's current portfolio looks like this:
-                                    Total value: {current_total_value_usd:.2f} USD.
-                                    Content:
-                                    {portfolio_context}
-
-                                    Please answer the user's questions about their portfolio. 
-                                    Provide constructive criticism about diversification, sector concentration, and potential risks. 
-                                    Be objective and point out if something is too risky. 
-                                    Do not give direct investment advice, but you can suggest industries worth analyzing."""
-                                }
-
-                                client = OpenAI(api_key=user_api_key, base_url="https://api.groq.com/openai/v1")
-                                
-                                api_messages = [system_prompt] + st.session_state[port_chat_key]
-                                
-                                response = client.chat.completions.create(
-                                    model="llama-3.3-70b-versatile",
-                                    messages=api_messages,
-                                    max_tokens=1024
-                                )
-                                
-                                ai_response = response.choices[0].message.content
-                                
-                                st.markdown(ai_response)
-                                st.session_state[port_chat_key].append({"role": "assistant", "content": ai_response})
-                                
-                            except Exception as e:
-                                st.error(f"⚠️ Network or API error: {str(e)}")
-
-
-        # EARNINGS CALENDAR
-        st.divider()
-        st.header("📅 Upcoming Quick Reports")
-        st.write("The next quarterly reports of companies in your portfolio and favorites.")
-
-        tracked_tickers = set([item['symbol'] for item in st.session_state.portfolio])
-        if 'favorites' in st.session_state:
-            tracked_tickers.update(st.session_state.favorites)
-
-        earnings_data = []
-
-        if tracked_tickers:
-            with st.spinner('Updating calendar...'):
-                for symbol in tracked_tickers:
-                    try:
-                        ticker = yf.Ticker(symbol)
-                        calendar = ticker.calendar
-                        
-                        if calendar is not None and 'Earnings Date' in calendar:
-                            next_report = calendar['Earnings Date'][0]
-                            date_str = next_report.strftime('%Y-%m-%d')
-                            
-                            earnings_data.append({
-                                "Share": symbol,
-                                "Report Date": date_str,
-                                "Type": "Portfolio" if any(item['symbol'] == symbol for item in st.session_state.portfolio) else "Favorite"
-                            })
-                    except:
-                        continue
-
-            if earnings_data:
-                df_earnings = pd.DataFrame(earnings_data).sort_values(by="Report Date")
-                
-                st.dataframe(df_earnings, use_container_width=True, hide_index=True)
-                
-                st.info("💡**Why is this important?** On the day of the report, the exchange rate often moves significantly depending on expectations.")
-            else:
-                st.info("There is currently no report date available for the papers being tracked.")
-        else:
-            st.warning("There are no stocks in your portfolio or favorites yet.")
-    
-
     st.divider()
     st.subheader("💾 Saving and loading data")
         
