@@ -61,6 +61,14 @@ st.markdown("""
         [data-testid="stMetricValue"] {
             font-size: 1.5rem !important;
         }
+            
+        .element-container:has(iframe[height="0"]),
+        .element-container:has(iframe[width="0"]) {
+            display: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 0 !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
