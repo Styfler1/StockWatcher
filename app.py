@@ -265,7 +265,7 @@ def get_stocks_from_screener(screener_type="trending"):
         quotes = data['finance']['result'][0]['quotes']
         return [q['symbol'] for q in quotes if '^' not in q['symbol'] and '=' not in q['symbol']][:6]
     except:
-        return ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL"]
+        return ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "BTC-USD", "ETH-USD", "AMD", "NFLX", "PLNTR", "SMCI", "INTC"]
 
 @st.cache_data(ttl=60)
 def get_live_price(symbol):
