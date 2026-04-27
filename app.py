@@ -828,7 +828,7 @@ if menu == "💰 My Portfolio":
         col_pie1, col_pie2, col_pie3 = st.columns(3)
         
         with col_pie1:
-            st.write("***🍰 Share Distribution")
+            st.write("###🍰 Share Distribution")
             df_stocks = df_portfolio[df_portfolio['Category'].isin(['Stocks', 'Crypto', 'Currency'])]
             fig_stock = px.pie(df_stocks, values='Current value (USD)', names='Share', hole=0.4)
             fig_stock.update_layout(showlegend=False)
@@ -836,7 +836,7 @@ if menu == "💰 My Portfolio":
             st.plotly_chart(fig_stock, use_container_width=True)
             
         with col_pie2:
-            st.write("***🏭 Sector Exposure")
+            st.write("###🏭 Sector Exposure")
             df_only_stocks = df_portfolio[df_portfolio['Category'] == 'Stocks']
             
             fig_sector = px.pie(df_only_stocks, values='Current value (USD)', names='Sector', hole=0.4)
@@ -845,7 +845,7 @@ if menu == "💰 My Portfolio":
             st.plotly_chart(fig_sector, use_container_width=True)
 
         with col_pie3:
-            st.write("***⚖️ Asset Allocation")
+            st.write("###⚖️ Asset Allocation")
             fig_alloc = px.pie(df_portfolio, values='Current value (USD)', names='Category', hole=0.4,
                                color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_alloc.update_layout(showlegend=False)
