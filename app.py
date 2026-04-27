@@ -1136,8 +1136,8 @@ elif menu == "📚 Investment Smart":
         with st.expander("🐂 Bull Market vs. 🐻 Bear Market"):
             st.write("""
             These terms describe the general mood and trend of the stock market.
-            * **Bull Market (Bikapiac):** The market is in a continuous upward trend. Investors are optimistic, the economy is growing, and prices are rising. *(The bull thrusts its horns up).*
-            * **Bear Market (Medvepiac):** The market falls by 20% or more from its recent peak. Investors are pessimistic, and prices are dropping. *(The bear swipes its paws down).*
+            * **Bull Market:** The market is in a continuous upward trend. Investors are optimistic, the economy is growing, and prices are rising.
+            * **Bear Market:** The market falls by 20% or more from its recent peak. Investors are pessimistic, and prices are dropping.
             """)
 
         with st.expander("💸 What is a Dividend?"):
@@ -1236,10 +1236,6 @@ elif menu == "📚 Investment Smart":
             """)
 
         st.divider()
-        # --- ÚJ RÉSZ VÉGE ---
-
-        st.header("🥧 Sample portfolios")
-        st.write("You can divide your money in different ways based on your risk tolerance.")
 
 
 else:
