@@ -720,13 +720,10 @@ if menu == "💰 My Portfolio":
     else:
         portfolio_data = []
         
-        # 1. Csoport: Csak tőzsdei részvények
         s_invested, s_current, s_div = 0, 0, 0
         
-        # 2. Csoport: Minden összesen
         total_invested, total_current = 0, 0
 
-        # Segédlista a 3. kördiagramhoz (Asset Allocation)
         allocation_data = []
 
         for item in st.session_state.portfolio:
@@ -735,23 +732,19 @@ if menu == "💰 My Portfolio":
             qty = item['qty']
             buy_p = item['buy_price']
             
-            # --- 1. ADATOK LEKÉRÉSE ÉS KATEGORIZÁLÁS ---
             if is_custom:
-                # Egyéb vagyontárgy (Ház, Bor, stb.)
                 category = item.get('custom_category', 'Other')
-                current_p = buy_p # Egyelőre feltételezzük, hogy az ára nem változott live adatok híján
+                current_p = buy_p
                 currency = "USD"
                 sector = "Alternative Assets"
                 exchange_rate = 1.0
                 div_native = 0
             else:
-                # Yahoo Finance eszköz (Részvény, Kriptó, Valuta)
                 info, hist = get_cached_ticker_data(symbol)
                 currency = info.get('currency', 'USD')
                 current_p = hist['Close'].iloc[-1] if not hist.empty else buy_p
                 sector = info.get('sector', 'Other')
                 
-                # Broad Category meghatározása a 3. diagramhoz
                 if "-USD" in symbol or "-EUR" in symbol:
                     category = "Crypto"
                 elif "=X" in symbol:
@@ -759,7 +752,6 @@ if menu == "💰 My Portfolio":
                 else:
                     category = "Stocks"
                 
-                # Osztalék számítás (csak részvényeknél)
                 div_yield = info.get('dividendYield', 0)
                 if div_yield is None: div_yield = 0
                 elif div_yield > 0.2: div_yield /= 100
@@ -767,12 +759,10 @@ if menu == "💰 My Portfolio":
                 
                 exchange_rate = get_exchange_rate(currency, "USD")
 
-            # --- 2. USD ÉRTÉKEK SZÁMÍTÁSA ---
             inv_usd = (buy_p * qty) * exchange_rate
             cur_usd = (current_p * qty) * exchange_rate
             div_usd = div_native * exchange_rate
 
-            # --- 3. ÖSSZESÍTÉS ---
             total_invested += inv_usd
             total_current += cur_usd
 
@@ -781,7 +771,6 @@ if menu == "💰 My Portfolio":
                 s_current += cur_usd
                 s_div += div_usd
 
-            # Adatok mentése a táblázathoz
             portfolio_data.append({
                 'Share': symbol,
                 'Category': category,
@@ -797,7 +786,6 @@ if menu == "💰 My Portfolio":
 
         df_portfolio = pd.DataFrame(portfolio_data)
 
-        # --- 4. MEGJELENÍTÉS: KÉT SOROS METRIKA ---
         st.subheader("📈 Stocks Only Performance")
         c1, c2, c3, c4 = st.columns(4)
         p_l_s = s_current - s_invested
@@ -841,7 +829,6 @@ if menu == "💰 My Portfolio":
         
         with col_pie1:
             st.write("### 🥧 Share Distribution")
-            # Csak a tőzsdei papírokat mutatjuk itt
             df_stocks = df_portfolio[df_portfolio['Category'].isin(['Stocks', 'Crypto', 'Currency'])]
             fig_stock = px.pie(df_stocks, values='Current value (USD)', names='Share', hole=0.4)
             fig_stock.update_layout(showlegend=False)
@@ -850,14 +837,15 @@ if menu == "💰 My Portfolio":
             
         with col_pie2:
             st.write("### 🏢 Sector Exposure")
-            fig_sector = px.pie(df_portfolio, values='Current value (USD)', names='Sector', hole=0.4)
+            df_only_stocks = df_portfolio[df_portfolio['Category'] == 'Stocks']
+            
+            fig_sector = px.pie(df_only_stocks, values='Current value (USD)', names='Sector', hole=0.4)
             fig_sector.update_layout(showlegend=False)
             fig_sector.update_traces(textinfo='percent+label')
             st.plotly_chart(fig_sector, use_container_width=True)
 
         with col_pie3:
             st.write("### 🛡️ Asset Allocation")
-            # Itt csoportosítunk a kategóriák szerint (Részvény, Kriptó, Ház, stb.)
             fig_alloc = px.pie(df_portfolio, values='Current value (USD)', names='Category', hole=0.4,
                                color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_alloc.update_layout(showlegend=False)
