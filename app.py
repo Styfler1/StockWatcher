@@ -1133,6 +1133,34 @@ elif menu == "📚 Investment Smart":
             * **Danger:** **Extreme volatility** (can fall 20-30% in a day), no guarantee.
             """)
 
+        with st.expander("🐂 Bull Market vs. 🐻 Bear Market"):
+            st.write("""
+            These terms describe the general mood and trend of the stock market.
+            * **Bull Market (Bikapiac):** The market is in a continuous upward trend. Investors are optimistic, the economy is growing, and prices are rising. *(The bull thrusts its horns up).*
+            * **Bear Market (Medvepiac):** The market falls by 20% or more from its recent peak. Investors are pessimistic, and prices are dropping. *(The bear swipes its paws down).*
+            """)
+
+        with st.expander("💸 What is a Dividend?"):
+            st.write("""
+            A dividend is a portion of a company's profit that is regularly paid out to its shareholders (usually quarterly).
+            * **Advantage:** Generates predictable passive income. You get paid simply for holding the stock, regardless of daily price movements.
+            * **Things to know:** Fast-growing tech companies rarely pay dividends because they reinvest their profits to grow faster. Mature, stable companies (like Coca-Cola) are the best dividend payers.
+            """)
+
+        with st.expander("⚖️ What is Market Capitalization (Market Cap)?"):
+            st.write("""
+            It shows the total total dollar market value of a company's outstanding shares *(Current Stock Price x Total Number of Shares)*.
+            * **Large-cap (e.g. Apple, Microsoft):** Over $10 billion. Usually safer, stable companies with slower, steady growth.
+            * **Small-cap:** Under $2 billion. Smaller, newer companies. They have higher growth potential but come with much higher risk and volatility.
+            """)
+
+        with st.expander("🛑 Stop-Loss & 🎯 Target Price"):
+            st.write("""
+            Essential risk management tools (which you can easily set up in the StockWatcher notification section!).
+            * **Stop-Loss (Lower limit):** A pre-set risk level. If the stock falls to this price, you sell it (or get an alert) to prevent further massive losses.
+            * **Target Price (Upper limit):** A pre-set goal where you are satisfied with the profit and plan to sell the stock before the market turns against you.
+            """)
+
         st.divider()
 
         st.header("🥧 Sample portfolios")
@@ -1179,12 +1207,6 @@ elif menu == "📚 Investment Smart":
 
         st.info("💡 **Tip:** Most experts recommend that beginners hold at least 70-80% of their portfolio in low-cost ETFs (e.g. S&P 500 or World ETF).")
 
-        with st.expander("What is Cryptocurrency?"):
-            st.write("""
-            Digital currencies (e.g. Bitcoin, Ethereum) that are not backed by a bank or state.
-            * **Advantage:** Huge upside potential, 24/7 trading.
-            * **Danger:** **Extreme volatility** (can fall 20-30% in a day), no guarantee.
-            """)
 
         st.divider()
 
