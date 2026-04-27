@@ -1704,7 +1704,6 @@ else:
             else:
                 link = '#'
                 
-            
             unique_id = f"{link}_{i}"
             
             img_url = ""
@@ -1766,3 +1765,9 @@ else:
                                     analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
                                     st.session_state.ai_analyses[unique_id] = analysis
                                     st.rerun()
+
+        if len(news_items) > st.session_state.news_limit:
+            st.write("")
+            if st.button("⬇️ Régebbi hírek betöltése", key=f"load_more_news_{selected}", use_container_width=True):
+                st.session_state.news_limit += 5
+                st.rerun()
