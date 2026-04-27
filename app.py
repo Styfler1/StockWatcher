@@ -828,7 +828,7 @@ if menu == "💰 My Portfolio":
         col_pie1, col_pie2, col_pie3 = st.columns(3)
         
         with col_pie1:
-            st.write("### 🥧 Share Distribution")
+            st.write("###Share Distribution")
             df_stocks = df_portfolio[df_portfolio['Category'].isin(['Stocks', 'Crypto', 'Currency'])]
             fig_stock = px.pie(df_stocks, values='Current value (USD)', names='Share', hole=0.4)
             fig_stock.update_layout(showlegend=False)
@@ -836,7 +836,7 @@ if menu == "💰 My Portfolio":
             st.plotly_chart(fig_stock, use_container_width=True)
             
         with col_pie2:
-            st.write("### 🏢 Sector Exposure")
+            st.write("###Sector Exposure")
             df_only_stocks = df_portfolio[df_portfolio['Category'] == 'Stocks']
             
             fig_sector = px.pie(df_only_stocks, values='Current value (USD)', names='Sector', hole=0.4)
@@ -845,7 +845,7 @@ if menu == "💰 My Portfolio":
             st.plotly_chart(fig_sector, use_container_width=True)
 
         with col_pie3:
-            st.write("### 🛡️ Asset Allocation")
+            st.write("###Asset Allocation")
             fig_alloc = px.pie(df_portfolio, values='Current value (USD)', names='Category', hole=0.4,
                                color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_alloc.update_layout(showlegend=False)
@@ -886,6 +886,7 @@ if menu == "💰 My Portfolio":
         )
 
         fig_bar.update_layout(
+            yaxis_type="log",
             bargap=0.35,
             bargroupgap=0.1,
             xaxis={'fixedrange': True}, 
@@ -1478,7 +1479,7 @@ else:
                     st.session_state.subscribed_news.add(selected)
                 else:
                     st.session_state.subscribed_news.discard(selected)
-                localS.setItem("stored_news_subs", list(st.session_state.subscribed_news))
+                localS.setItem("stored_news_subs", list(st.session_state.subscribed_news), key=f"save_news_subs_{selected}")
             
             is_subscribed_news = selected in st.session_state.subscribed_news
             st.toggle(
@@ -1493,7 +1494,7 @@ else:
                     st.session_state.subscribed_alerts.add(selected)
                 else:
                     st.session_state.subscribed_alerts.discard(selected)
-                localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts))
+                localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts), key=f"save_alert_subs_{selected}")
 
             is_subscribed_alerts = selected in st.session_state.subscribed_alerts
             st.toggle(
