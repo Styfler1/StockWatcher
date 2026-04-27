@@ -414,48 +414,48 @@ def run_global_alerts():
 
     for ticker_sym in all_watched:
         price_data = get_live_price(ticker_sym)
-        if not price_data: continue
         
-        curr_p = price_data['c']
-        alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
-        
-        try:
-            ticker_info = get_stock_details(ticker_sym)
-            curr_symbol = ticker_info.get('currency', 'USD')
-        except:
-            curr_symbol = 'USD'
+        if price_data:
+            curr_p = price_data['c']
+            alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
+            
+            try:
+                ticker_info = get_stock_details(ticker_sym)
+                curr_symbol = ticker_info.get('currency', 'USD')
+            except:
+                curr_symbol = 'USD'
 
-        if ticker_sym in st.session_state.subscribed_alerts and st.session_state.user_email:
-            low_l = float(alert_limits["low"])
-            high_l = float(alert_limits["high"])
+            if ticker_sym in st.session_state.subscribed_alerts and st.session_state.user_email:
+                low_l = float(alert_limits["low"])
+                high_l = float(alert_limits["high"])
 
-            if low_l > 0 and curr_p < low_l:
-                alert_key = f"{ticker_sym}_low"
-                if st.session_state.sent_alerts.get(alert_key) != today_str:
-                    subject = f"⚠️ STOP-LOSS: {ticker_sym} fell!"
-                    body = (
-                        f"Greetings!\n\n"
-                        f"The price of {ticker_sym} is currently {curr_p} {curr_symbol}, "
-                        f"which has fallen below the set limit {low_l} {curr_symbol}."
-                        f"{unsubscribe_footer}"
-                    )
-                    if send_email_alert(st.session_state.user_email, subject, body):
-                        st.session_state.sent_alerts[alert_key] = today_str
-                        st.toast(f"📧 Stop-loss alert sent ({ticker_sym})!", icon="📩")
+                if low_l > 0 and curr_p < low_l:
+                    alert_key = f"{ticker_sym}_low"
+                    if st.session_state.sent_alerts.get(alert_key) != today_str:
+                        subject = f"⚠️ STOP-LOSS: {ticker_sym} fell!"
+                        body = (
+                            f"Greetings!\n\n"
+                            f"The price of {ticker_sym} is currently {curr_p} {curr_symbol}, "
+                            f"which has fallen below the set limit {low_l} {curr_symbol}."
+                            f"{unsubscribe_footer}"
+                        )
+                        if send_email_alert(st.session_state.user_email, subject, body):
+                            st.session_state.sent_alerts[alert_key] = today_str
+                            st.toast(f"📧 Stop-loss alert sent ({ticker_sym})!", icon="📩")
 
-            if high_l > 0 and curr_p > high_l:
-                alert_key = f"{ticker_sym}_high"
-                if st.session_state.sent_alerts.get(alert_key) != today_str:
-                    subject = f"🚀 TARGET PRICE: {ticker_sym} reached!"
-                    body = (
-                        f"Gretings!\n\n"
-                        f"The price of {ticker_sym} has reached {curr_p} {curr_symbol}, "
-                        f"thus the target flow of {high_l} {curr_symbol} has been met."
-                        f"{unsubscribe_footer}"
-                    )
-                    if send_email_alert(st.session_state.user_email, subject, body):
-                        st.session_state.sent_alerts[alert_key] = today_str
-                        st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
+                if high_l > 0 and curr_p > high_l:
+                    alert_key = f"{ticker_sym}_high"
+                    if st.session_state.sent_alerts.get(alert_key) != today_str:
+                        subject = f"🚀 TARGET PRICE: {ticker_sym} reached!"
+                        body = (
+                            f"Greetings!\n\n"
+                            f"The price of {ticker_sym} has reached {curr_p} {curr_symbol}, "
+                            f"thus the target flow of {high_l} {curr_symbol} has been met."
+                            f"{unsubscribe_footer}"
+                        )
+                        if send_email_alert(st.session_state.user_email, subject, body):
+                            st.session_state.sent_alerts[alert_key] = today_str
+                            st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
 
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             try:
@@ -485,7 +485,6 @@ def run_global_alerts():
                         st.session_state.seen_news.add(n_uuid)
                         new_uuids_found = True
                         
-
                         if not is_first_check_this_session:
                             summary = n_data.get('summary', '')
                             ai_analysis = ""
@@ -500,7 +499,7 @@ def run_global_alerts():
                                 st.toast(f"📧 Sent: {ticker_sym} news!", icon="📩")
                 
                 if new_uuids_found:
-                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"force_save_news_{int(time.time())}")
+                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key="force_save_news_global")
                     
                 st.session_state.session_checked_news_tickers.add(ticker_sym)
 
@@ -1768,6 +1767,6 @@ else:
 
         if len(news_items) > st.session_state.news_limit:
             st.write("")
-            if st.button("⬇️ Régebbi hírek betöltése", key=f"load_more_news_{selected}", use_container_width=True):
+            if st.button("⬇️ More articles", key=f"load_more_news_{selected}", use_container_width=True):
                 st.session_state.news_limit += 5
                 st.rerun()
