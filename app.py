@@ -646,7 +646,6 @@ if menu == "💰 My Portfolio":
 
         # Stock buy/sell
     
-    # === EDDIG TART AZ "Add new stock" EXPANDER ===
 
     with st.expander("📦 Add other asset (Real estate, Wine, etc.)"):
         st.write("Add alternative investments that are not tracked on the stock market.")
@@ -672,41 +671,7 @@ if menu == "💰 My Portfolio":
                 st.rerun()
             else:
                 st.warning("Please provide a name, and ensure quantity and price are greater than 0.")
-
-    with st.expander("➖ Sale of Assets (Full or Partial)"):
-        if not st.session_state.portfolio:
-            st.write("You have no assets to sell.")
-        else:
-            stock_options = []
-            for i, item in enumerate(st.session_state.portfolio):
-                if item.get('is_custom'):
-                    label = f"{i}: {item['symbol']} ({item['qty']} pieces) - {item['custom_category']}"
-                else:
-                    label = f"{i}: {item['symbol']} ({item['qty']} pieces)"
-                stock_options.append(label)
                 
-            selected_to_sell = st.selectbox("Which asset are you looking to sell?", stock_options)
-            
-            idx = int(selected_to_sell.split(":")[0])
-            current_item = st.session_state.portfolio[idx]
-            
-            col_s1, col_s2 = st.columns(2)
-            sell_qty = col_s1.number_input("Quantity to sell:", min_value=0.01, max_value=float(current_item['qty']), step=1.0)
-            sell_price = col_s2.number_input("Selling price (USD):", min_value=0.0, value=float(current_item['buy_price']))
-
-            if st.button("Complete sale", use_container_width=True, type="primary"):
-                profit = (sell_price - current_item['buy_price']) * sell_qty
-                
-                if sell_qty < current_item['qty']:
-                    st.session_state.portfolio[idx]['qty'] -= sell_qty
-                    st.toast(f"Sold {sell_qty} pieces of {current_item['symbol']}. Profit: {profit:.2f} USD", icon="💰")
-                else:
-                    st.session_state.portfolio.pop(idx)
-                    localS.setItem("stored_portfolio", st.session_state.portfolio)
-                    st.toast(f"The entire {current_item['symbol']} position has been closed. Profit: {profit:.2f} USD", icon="✅")
-                
-                time.sleep(1)
-                st.rerun()
     
     
     with st.expander("➖ Sale (Full or Partial)"):
