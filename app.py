@@ -452,16 +452,20 @@ def run_global_alerts():
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             news = get_stock_news(ticker_sym)
             if news:
+                if 'news_initialized' not in st.session_state:
+                    st.session_state.news_initialized = set()
+                    
+                is_first_check = ticker_sym not in st.session_state.news_initialized
+                
                 emails_sent_now = 0
-                has_new_saved = False # Figyeljük, hogy történt-e sikeres küldés
+                has_new_saved = False 
                 
                 for item in news[:5]:
-                    if emails_sent_now >= 2:
+                    if emails_sent_now >= 2 and not is_first_check:
                         break
                         
                     n_data = item.get('content', item)
                     
-                    # 1. Hivatkozás kinyerése biztosan
                     raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or n_data.get('link')
                     if isinstance(raw_link, dict):
                         link = raw_link.get('url', '#')
@@ -470,46 +474,49 @@ def run_global_alerts():
                     else:
                         link = '#'
                         
-                    # 2. BIZTOSAN egyedi azonosító generálása
                     title = n_data.get('title', 'New news')
                     n_uuid = n_data.get('uuid')
                     
-                    # Ha a Yahoo nem ad ID-t, a linket használjuk. Ha az is '#', akkor a hír címét!
                     if not n_uuid:
                         n_uuid = link if link != '#' else title
                     
-                    # 3. Ellenőrzés a memóriából (csak akkor, ha még sosem láttuk)
                     if n_uuid and n_uuid not in st.session_state.seen_news:
-                        summary = n_data.get('summary', '')
-
-                        ai_analysis = ""
-                        if global_api_key:
-                            ai_result = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
-                            if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
-                                ai_analysis = ai_result
-
-                        subject = f"📰 News + AI analysis: {ticker_sym}"
-                        body = f"Greetings!\n\n"
-                        body += f"I found news for {ticker_sym} stock:\n"
-                        body += f"Title: {title}\n"
-                        body += f"Link: {link}\n\n"
                         
-                        if ai_analysis:
-                            body += f"--- 🤖 QUICK AI ANALYSIS ---\n{ai_analysis}\n"
-                        else:
-                            body += "*(There is currently no AI analysis for this news - check your API key!)*\n"
-                        
-                        body += unsubscribe_footer
-                        
-                        if send_email_alert(st.session_state.user_email, subject, body):
-                            # Hozzáadjuk a listához, hogy többet ne küldje el
+                        if is_first_check:
                             st.session_state.seen_news.add(n_uuid)
-                            emails_sent_now += 1
                             has_new_saved = True
-                            st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
+                            
+                        else:
+                            summary = n_data.get('summary', '')
+
+                            ai_analysis = ""
+                            if global_api_key:
+                                ai_result = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
+                                if ai_result and "⚠️" not in ai_result and "❌" not in ai_result:
+                                    ai_analysis = ai_result
+
+                            subject = f"📰 News + AI analysis: {ticker_sym}"
+                            body = f"Greetings!\n\n"
+                            body += f"I found news for {ticker_sym} stock:\n"
+                            body += f"Title: {title}\n"
+                            body += f"Link: {link}\n\n"
+                            
+                            if ai_analysis:
+                                body += f"--- 🤖 QUICK AI ANALYSIS ---\n{ai_analysis}\n"
+                            else:
+                                body += "*(There is currently no AI analysis for this news - check your API key!)*\n"
+                            
+                            body += unsubscribe_footer
+                            
+                            if send_email_alert(st.session_state.user_email, subject, body):
+                                st.session_state.seen_news.add(n_uuid)
+                                emails_sent_now += 1
+                                has_new_saved = True
+                                st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
                 
-                # 4. MENTÉS CSAK EGYSZER, A CIKLUSON KÍVÜL
-                # Ezzel elkerüljük, hogy a Streamlit összeomoljon a túl sok egyidejű mentéstől
+                if is_first_check:
+                    st.session_state.news_initialized.add(ticker_sym)
+                
                 if has_new_saved:
                     localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_batch_{ticker_sym}")
 
