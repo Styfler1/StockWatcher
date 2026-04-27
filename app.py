@@ -75,6 +75,8 @@ st.markdown("""
 
 # Session states
 
+if 'session_checked_news_tickers' not in st.session_state:
+    st.session_state.session_checked_news_tickers = set()
 if 'language' not in st.session_state:
     st.session_state.language = 'hu'
 
@@ -456,51 +458,51 @@ def run_global_alerts():
                         st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
 
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
-            ticker_obj = yf.Ticker(ticker_sym)
-            news = ticker_obj.news 
+            try:
+                ticker_obj = yf.Ticker(ticker_sym)
+                news = ticker_obj.news 
+            except Exception:
+                news = []
             
             if news:
-                current_unix_time = int(time.time())
+                is_first_check_this_session = ticker_sym not in st.session_state.session_checked_news_tickers
                 
-                if ticker_sym not in st.session_state.news_subs_times:
-                    st.session_state.news_subs_times[ticker_sym] = current_unix_time
-                    localS.setItem("stored_news_subs_times", st.session_state.news_subs_times, key=f"init_times_{ticker_sym}")
-                
-                subscription_time = st.session_state.news_subs_times[ticker_sym]
                 emails_sent_now = 0
+                new_uuids_found = False
                 
                 for item in news[:5]:
                     if emails_sent_now >= 1:
                         break
                         
                     n_data = item.get('content', item)
-                    publish_time = n_data.get('providerPublishTime', 0)
-                    
-                    is_brand_new = publish_time > (subscription_time - 60)
                     
                     raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or n_data.get('link')
                     link = raw_link if isinstance(raw_link, str) else "#"
                     title = n_data.get('title', 'New news')
                     n_uuid = n_data.get('uuid') or link or title
                     
-                    if is_brand_new and (n_uuid not in st.session_state.seen_news):
+                    if n_uuid not in st.session_state.seen_news:
                         st.session_state.seen_news.add(n_uuid)
-                        localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"force_save_{n_uuid[:10]}")
+                        new_uuids_found = True
                         
-                        summary = n_data.get('summary', '')
-                        ai_analysis = ""
-                        if global_api_key:
-                            ai_analysis = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
 
-                        subject = f"📰 NEW News: {ticker_sym}"
-                        body = f"Greetings!\n\nNew info for {ticker_sym}:\n{title}\nLink: {link}\n\nAI: {ai_analysis}\n{unsubscribe_footer}"
-                        
-                        if send_email_alert(st.session_state.user_email, subject, body):
-                            emails_sent_now += 1
-                            st.toast(f"📧 Sent: {ticker_sym} news!", icon="📩")
+                        if not is_first_check_this_session:
+                            summary = n_data.get('summary', '')
+                            ai_analysis = ""
+                            if global_api_key:
+                                ai_analysis = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
+
+                            subject = f"📰 NEW News: {ticker_sym}"
+                            body = f"Greetings!\n\nNew info for {ticker_sym}:\n{title}\nLink: {link}\n\nAI: {ai_analysis}\n{unsubscribe_footer}"
+                            
+                            if send_email_alert(st.session_state.user_email, subject, body):
+                                emails_sent_now += 1
+                                st.toast(f"📧 Sent: {ticker_sym} news!", icon="📩")
+                
+                if new_uuids_found:
+                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"force_save_news_{int(time.time())}")
                     
-                    elif not is_brand_new and (n_uuid not in st.session_state.seen_news):
-                        st.session_state.seen_news.add(n_uuid)
+                st.session_state.session_checked_news_tickers.add(ticker_sym)
 
 run_global_alerts()
 
