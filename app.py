@@ -444,20 +444,34 @@ def run_global_alerts():
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             news = get_stock_news(ticker_sym)
             if news:
-                emails_sent_now = 0  # Számláló, hogy ne küldjön 50 emailt egyszerre
+                emails_sent_now = 0
+                has_new_saved = False # Figyeljük, hogy történt-e sikeres küldés
                 
-                # Végignézzük a legfelső 5 hírt, hátha a legelső egy régi "kitűzött" cikk
                 for item in news[:5]:
                     if emails_sent_now >= 2:
-                        break  # Maximum 2 hír-emailt küldünk egy perc alatt
+                        break
                         
                     n_data = item.get('content', item)
-                    n_uuid = item.get('uuid') or n_data.get('url')
                     
-                    # Ha van UUID-je, és még NEM láttuk korábban:
+                    # 1. Hivatkozás kinyerése biztosan
+                    raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or n_data.get('link')
+                    if isinstance(raw_link, dict):
+                        link = raw_link.get('url', '#')
+                    elif isinstance(raw_link, str):
+                        link = raw_link
+                    else:
+                        link = '#'
+                        
+                    # 2. BIZTOSAN egyedi azonosító generálása
+                    title = n_data.get('title', 'New news')
+                    n_uuid = n_data.get('uuid')
+                    
+                    # Ha a Yahoo nem ad ID-t, a linket használjuk. Ha az is '#', akkor a hír címét!
+                    if not n_uuid:
+                        n_uuid = link if link != '#' else title
+                    
+                    # 3. Ellenőrzés a memóriából (csak akkor, ha még sosem láttuk)
                     if n_uuid and n_uuid not in st.session_state.seen_news:
-                        title = n_data.get('title', 'New news')
-                        link = n_data.get('url') or n_data.get('link', '#')
                         summary = n_data.get('summary', '')
 
                         ai_analysis = ""
@@ -479,15 +493,17 @@ def run_global_alerts():
                         
                         body += unsubscribe_footer
                         
-                        # KÜLDÉS ÉS MENTÉS
                         if send_email_alert(st.session_state.user_email, subject, body):
+                            # Hozzáadjuk a listához, hogy többet ne küldje el
                             st.session_state.seen_news.add(n_uuid)
-                            
-                            # FIGYELEM: Egyedi kulcs a mentéshez (emails_sent_now), hogy ne omoljon össze a Streamlit DuplicateElement hibával!
-                            localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_{ticker_sym}_{emails_sent_now}")
-                            
-                            st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
                             emails_sent_now += 1
+                            has_new_saved = True
+                            st.toast(f"📧 News sent with AI analysis ({ticker_sym})!", icon="📩")
+                
+                # 4. MENTÉS CSAK EGYSZER, A CIKLUSON KÍVÜL
+                # Ezzel elkerüljük, hogy a Streamlit összeomoljon a túl sok egyidejű mentéstől
+                if has_new_saved:
+                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_news_batch_{ticker_sym}")
 
 run_global_alerts()
 
