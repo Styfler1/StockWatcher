@@ -1501,6 +1501,15 @@ else:
                 localS.setItem("stored_news_subs", list(st.session_state.subscribed_news), key=f"save_news_subs_{selected}")
                 localS.setItem("stored_news_subs_times", st.session_state.news_subs_times, key=f"save_news_times_{selected}")
 
+                is_subscribed_news = selected in st.session_state.subscribed_news
+
+                st.toggle(
+                    "Request news", 
+                    value=is_subscribed_news, 
+                    key=f"news_toggle_{selected}",
+                    on_change=toggle_news
+                )
+
             def toggle_price_sub():
                 if st.session_state[f"alert_sub_{selected}"]:
                     st.session_state.subscribed_alerts.add(selected)
