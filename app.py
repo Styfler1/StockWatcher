@@ -1105,7 +1105,7 @@ elif menu == "📚 Investment Smart":
 
         st.header("🔍 Basics")
         
-        with st.expander("🏢 What is a share?", expanded=True):
+        with st.expander("🏢 What is a stock?", expanded=True):
             st.write("""
             A stock is a piece of ownership in a company. When you buy a stock, you become an owner in the company.
             * **Advantage:** If the company does well, the price increases and you can receive dividends.
@@ -1178,6 +1178,47 @@ elif menu == "📚 Investment Smart":
             st.write("The hope of a big return, but the possibility of a big loss.")
 
         st.info("💡 **Tip:** Most experts recommend that beginners hold at least 70-80% of their portfolio in low-cost ETFs (e.g. S&P 500 or World ETF).")
+
+        with st.expander("What is Cryptocurrency?"):
+            st.write("""
+            Digital currencies (e.g. Bitcoin, Ethereum) that are not backed by a bank or state.
+            * **Advantage:** Huge upside potential, 24/7 trading.
+            * **Danger:** **Extreme volatility** (can fall 20-30% in a day), no guarantee.
+            """)
+
+        st.divider()
+
+        # --- ÚJ RÉSZ: PIACI SZEKTOROK ---
+        st.header("🏢 Market Sectors")
+        st.write("The stock market is divided into 11 main sectors. Diversifying your investments across different sectors helps reduce risk. Here are the sectors with their top 3 market leaders:")
+
+        sec_col1, sec_col2 = st.columns(2)
+
+        with sec_col1:
+            st.markdown("""
+            * **💻 Information Technology:** Apple (AAPL), Microsoft (MSFT), Nvidia (NVDA)
+            * **🏥 Health Care:** Eli Lilly (LLY), UnitedHealth (UNH), Johnson & Johnson (JNJ)
+            * **🏦 Financials:** JPMorgan Chase (JPM), Visa (V), Mastercard (MA)
+            * **🛍️ Consumer Discretionary:** Amazon (AMZN), Tesla (TSLA), Home Depot (HD)
+            * **📱 Communication Services:** Alphabet (GOOGL), Meta (META), Netflix (NFLX)
+            * **🏭 Industrials:** Caterpillar (CAT), Union Pacific (UNP), General Electric (GE)
+            """)
+
+        with sec_col2:
+            st.markdown("""
+            * **🛒 Consumer Staples:** Walmart (WMT), Procter & Gamble (PG), Coca-Cola (KO)
+            * **🛢️ Energy:** ExxonMobil (XOM), Chevron (CVX), ConocoPhillips (COP)
+            * **⚡ Utilities:** NextEra Energy (NEE), Southern Company (SO), Duke Energy (DUK)
+            * **🏢 Real Estate:** Prologis (PLD), American Tower (AMT), Equinix (EQIX)
+            * **🧱 Materials:** Linde (LIN), Sherwin-Williams (SHW), Freeport-McMoRan (FCX)
+            """)
+
+        st.divider()
+        # --- ÚJ RÉSZ VÉGE ---
+
+        st.header("🥧 Sample portfolios")
+        st.write("You can divide your money in different ways based on your risk tolerance.")
+
 
 else:
     st.sidebar.subheader("🔍 Search")
