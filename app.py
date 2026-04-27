@@ -720,8 +720,20 @@ if menu == "💰 My Portfolio":
             current_item = st.session_state.portfolio[idx]
             
             col_s1, col_s2 = st.columns(2)
-            sell_qty = col_s1.number_input("Quantity to sell:", min_value=0.01, max_value=float(current_item['qty']), step=1.0)
-            sell_price = col_s2.number_input("Selling price (USD):", min_value=0.0, value=float(current_item['buy_price']))
+            sell_qty = col_s1.number_input(
+                "Quantity to sell:", 
+                min_value=0.01, 
+                max_value=float(current_item['qty']), 
+                step=1.0, 
+                key="sell_asset_qty"  # <-- EZT ADD HOZZÁ
+            )
+            
+            sell_price = col_s2.number_input(
+                "Selling price (USD):", 
+                min_value=0.0, 
+                value=float(current_item['buy_price']), 
+                key="sell_asset_price" # <-- EZT ADD HOZZÁ
+            )
 
             if st.button("Complete purchase", use_container_width=True, type="primary"):
                 profit = (sell_price - current_item['buy_price']) * sell_qty
@@ -751,7 +763,7 @@ if menu == "💰 My Portfolio":
 
             if item.get('is_custom'):
                 continue
-            
+
             info, hist = get_cached_ticker_data(item['symbol'])
             
             currency = info.get('currency', 'USD')
