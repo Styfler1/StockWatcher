@@ -645,7 +645,71 @@ if menu == "💰 My Portfolio":
                 st.warning("Both quantity and price must be greater than 0!")
 
         # Stock buy/sell
-    with st.expander("➖ Sale of Stocks (Full or Partial)"):
+    
+    # === EDDIG TART AZ "Add new stock" EXPANDER ===
+
+    with st.expander("📦 Add other asset (Real estate, Wine, etc.)"):
+        st.write("Add alternative investments that are not tracked on the stock market.")
+        custom_name = st.text_input("Name of the asset (e.g. Miami Apartment, Vintage Rolex):")
+        custom_category = st.selectbox("Category:", ["Real Estate", "Wine", "Jewelry", "Art", "Vehicle", "Crypto (Offline)", "Other"])
+        
+        col_c1, col_c2 = st.columns(2)
+        custom_qty = col_c1.number_input("Quantity:", min_value=0.0001, step=1.0, format="%.4f", key="custom_qty")
+        custom_price = col_c2.number_input("Purchase Price (USD per unit):", min_value=0.0, step=100.0, key="custom_price")
+        
+        if st.button("Add alternative asset", use_container_width=True):
+            if custom_name and custom_qty > 0 and custom_price > 0:
+                st.session_state.portfolio.append({
+                    'symbol': custom_name,
+                    'buy_price': custom_price,
+                    'qty': custom_qty,
+                    'is_custom': True,  # <-- EZ A KULCS: Jelzi, hogy ez nem tőzsdei papír!
+                    'custom_category': custom_category
+                })
+                localS.setItem("stored_portfolio", st.session_state.portfolio)
+                st.success(f"✅ {custom_name} successfully added!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.warning("Please provide a name, and ensure quantity and price are greater than 0.")
+
+    with st.expander("➖ Sale of Assets (Full or Partial)"):
+        if not st.session_state.portfolio:
+            st.write("You have no assets to sell.")
+        else:
+            stock_options = []
+            for i, item in enumerate(st.session_state.portfolio):
+                if item.get('is_custom'):
+                    label = f"{i}: {item['symbol']} ({item['qty']} pieces) - {item['custom_category']}"
+                else:
+                    label = f"{i}: {item['symbol']} ({item['qty']} pieces)"
+                stock_options.append(label)
+                
+            selected_to_sell = st.selectbox("Which asset are you looking to sell?", stock_options)
+            
+            idx = int(selected_to_sell.split(":")[0])
+            current_item = st.session_state.portfolio[idx]
+            
+            col_s1, col_s2 = st.columns(2)
+            sell_qty = col_s1.number_input("Quantity to sell:", min_value=0.01, max_value=float(current_item['qty']), step=1.0)
+            sell_price = col_s2.number_input("Selling price (USD):", min_value=0.0, value=float(current_item['buy_price']))
+
+            if st.button("Complete sale", use_container_width=True, type="primary"):
+                profit = (sell_price - current_item['buy_price']) * sell_qty
+                
+                if sell_qty < current_item['qty']:
+                    st.session_state.portfolio[idx]['qty'] -= sell_qty
+                    st.toast(f"Sold {sell_qty} pieces of {current_item['symbol']}. Profit: {profit:.2f} USD", icon="💰")
+                else:
+                    st.session_state.portfolio.pop(idx)
+                    localS.setItem("stored_portfolio", st.session_state.portfolio)
+                    st.toast(f"The entire {current_item['symbol']} position has been closed. Profit: {profit:.2f} USD", icon="✅")
+                
+                time.sleep(1)
+                st.rerun()
+    
+    
+    with st.expander("➖ Sale (Full or Partial)"):
         if not st.session_state.portfolio:
             st.write("You have no shares to sell.")
         else:
@@ -684,6 +748,10 @@ if menu == "💰 My Portfolio":
         
         
         for item in st.session_state.portfolio:
+
+            if item.get('is_custom'):
+                continue
+            
             info, hist = get_cached_ticker_data(item['symbol'])
             
             currency = info.get('currency', 'USD')
