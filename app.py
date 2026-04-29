@@ -22,10 +22,6 @@ from streamlit_autorefresh import st_autorefresh
 localS = LocalStorage()
 
 
-# Page title
-st.set_page_config(page_title="StockWatcher", page_icon="📈", layout="wide")
-
-
 
 # Styles
 
@@ -76,6 +72,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
+# Page title
+st.set_page_config(page_title="StockWatcher", page_icon="📈", layout="wide")
 
 # Session states
 
