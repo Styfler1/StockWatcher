@@ -388,10 +388,17 @@ def draw_stock_buttons(stock_list, key_prefix):
 
 
 
-st.sidebar.header("📈 Stock Exchange Center")
+st.sidebar.header("📈 StockWatcher")
 
 
 st.sidebar.divider() 
+
+if st.button("🗑️ Clear seen news (test)"):
+    st.session_state.seen_news = set()
+    localS.setItem("stored_seen_news", [])
+    st.session_state.session_checked_news_tickers = set()  # reset first-check guard too
+    st.success("Cleared! Next refresh will re-register all current news.")
+    st.rerun()
 
 
 
@@ -460,7 +467,7 @@ def run_global_alerts():
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             try:
                 ticker_obj = yf.Ticker(ticker_sym)
-                news = ticker_obj.news 
+                news = ticker_obj.news  # direct yf call, not get_stock_news()
             except Exception:
                 news = []
             
