@@ -45,7 +45,7 @@ st.markdown("""
         }
             
         h1 {
-            font-size: 1.8rem !important;
+            font-size: 2rem !important;
         }
 
         [data-testid="stAppViewBlockContainer"] {
@@ -78,8 +78,12 @@ st.set_page_config(page_title="StockWatcher", page_icon="📈", layout="wide")
 
 # Session states
 
+# ERRE:
 if 'session_checked_news_tickers' not in st.session_state:
-    st.session_state.session_checked_news_tickers = set()
+    saved_checked = localS.getItem("stored_checked_tickers")
+    st.session_state.session_checked_news_tickers = set(saved_checked) if saved_checked else set()
+
+
 if 'language' not in st.session_state:
     st.session_state.language = 'hu'
 
@@ -391,19 +395,11 @@ def draw_stock_buttons(stock_list, key_prefix):
 
 
 
-st.sidebar.header("📈 StockWatcher")
+st.sidebar.markdown("<h1 style='font-size: 2rem;'>📈 StockWatcher</h1>", unsafe_allow_html=True)
+
 
 
 st.sidebar.divider() 
-
-if st.button("🗑️ Clear seen news (test)"):
-    st.session_state.seen_news = set()
-    localS.setItem("stored_seen_news", [])
-    st.session_state.session_checked_news_tickers = set()  # reset first-check guard too
-    st.success("Cleared! Next refresh will re-register all current news.")
-    st.rerun()
-
-
 
 def run_global_alerts():
     all_watched = st.session_state.subscribed_alerts.union(st.session_state.subscribed_news)
@@ -470,7 +466,7 @@ def run_global_alerts():
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             try:
                 ticker_obj = yf.Ticker(ticker_sym)
-                news = ticker_obj.news  # direct yf call, not get_stock_news()
+                news = ticker_obj.news 
             except Exception:
                 news = []
             
@@ -509,9 +505,10 @@ def run_global_alerts():
                                 st.toast(f"📧 Sent: {ticker_sym} news!", icon="📩")
                 
                 if new_uuids_found:
-                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key="force_save_news_global")
+                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_seen_news_{ticker_sym}")
                     
                 st.session_state.session_checked_news_tickers.add(ticker_sym)
+                localS.setItem("stored_checked_tickers", list(st.session_state.session_checked_news_tickers), key=f"save_checked_{ticker_sym}")
 
 run_global_alerts()
 
@@ -528,14 +525,20 @@ menu = st.sidebar.selectbox("Select item:", ["📈 StockWatcher", "💰 My Portf
 
 #Auto refresh
 st.sidebar.divider()
+
+saved_autorefresh = localS.getItem("stored_autorefresh")
+
 auto_refresh_enabled = st.sidebar.toggle(
     "Automatic update (1 minute)",
-    value=False,
-    help="If you turn it on, the page will automatically reload every minute. This is necessary so that the program can continuously monitor prices and news and send you an email if the limit is exceeded."
+    value=saved_autorefresh if saved_autorefresh is not None else False,
+    help="If you turn it on, the page will automatically reload every minute. This is necessary so that the program can continuously monitor prices and news and send you an email if the limit is exceeded.",
+    key="auto_refresh_toggle"
 )
 
+if auto_refresh_enabled != saved_autorefresh:
+    localS.setItem("stored_autorefresh", auto_refresh_enabled)
+
 if auto_refresh_enabled:
-    from streamlit_autorefresh import st_autorefresh
     st_autorefresh(interval=60000, key="stock_watcher_refresh")
 
 
@@ -1172,7 +1175,7 @@ elif menu == "ℹ️ About the program":
         > Since the application does not use a central server to store data, notifications **will only work** if:
         > 1. The page is **open** in your browser.
         > 2. Your computer is **turned on**.
-        > 3. The **Auto-Refresh** feature is active.
+        > 3. The **Auto-Refresh** feature is active.    
         
         For the most reliable experience, it is recommended to leave the app open on a continuously running server or a dedicated, always-on computer.
 
@@ -1363,21 +1366,26 @@ else:
             localS.setItem("stored_favorites", list(st.session_state.favorites))
 
 
-    col_title, col_fav, col_sentiment = st.columns([0.2, 0.3, 0.5])
+    col_title, col_sentiment = st.columns([0.4, 0.6])
 
     with col_title:
-        st.title(f"📊 {selected}")
-        st.caption(company_name)
 
-    with col_fav:
-        st.markdown('<div style="padding-top: 35px;"></div>', unsafe_allow_html=True)
-        is_fav = selected in st.session_state.favorites
-        st.checkbox(
-            "⭐", 
-            value=is_fav, 
-            key=f"check_{selected}", 
-            on_change=toggle_favorite,
+        title_col, star_col = st.columns([0.5, 0.8])
+
+        with title_col:
+            st.title(f"📊 {selected}")
+            
+        with star_col:
+            st.markdown('<div style="padding-top: 25px;"></div>', unsafe_allow_html=True)
+            is_fav = selected in st.session_state.favorites
+            st.checkbox(
+                "⭐", 
+                value=is_fav, 
+                key=f"check_{selected}", 
+                on_change=toggle_favorite,
         )
+
+        st.caption(company_name)
 
     with col_sentiment:
         sentiment_val = get_market_sentiment()
@@ -1521,13 +1529,12 @@ else:
                 else:
                     st.error("❌ Invalid format!")
 
-        # 2. OSZLOP: Alsó limit
         with col_low:
             st.write(f"**Lower limit (Stop-Loss)**")
             
             def update_low_limit():
                 st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
-                localS.setItem("stored_alerts", st.session_state.price_alerts)
+                localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_low_{selected}")
 
             saved_low = st.session_state.price_alerts[selected]["low"]
             
@@ -1540,12 +1547,12 @@ else:
             )
             
             if low_price > 0 and current_price != 'N/A':
-                dist_low = ((current_price - low_price) / current_price) * 100
+                dist_low = (low_price / current_price) * 100
                 dist_low = max(0, min(100, dist_low))
-                color = "#ff4b4b" if dist_low < 5 else "#ffa421"
+                color = "#ff4b4b" if dist_low > 90 else "#ffa421"
                 
                 st.markdown(f"""
-                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Távolság: {dist_low:.1f}%</div>
+                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Stop-loss közelség: {dist_low:.1f}%</div>
                     <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
                         <div style="width: {dist_low}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
                     </div>
@@ -1556,7 +1563,7 @@ else:
             
             def update_high_limit():
                 st.session_state.price_alerts[selected]["high"] = st.session_state[f"high_{selected}"]
-                localS.setItem("stored_alerts", st.session_state.price_alerts)
+                localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_high_{selected}")
 
             saved_high = st.session_state.price_alerts[selected]["high"]
             
@@ -1602,12 +1609,8 @@ else:
         if low_price > 0 and current_price != 'N/A' and current_price < low_price:
             if st.session_state.sent_alerts.get(alert_key_low) != today_str:
                 subject = f"⚠️ STOP-LOSS {selected} fell!"
-                body = (
-                    f"Greetings!!\n\n"
-                    f"The current exchange rate for {selected} is {current_price} {currency}", 
-                    f"which fell below the set {low_price} {currency} limit."
-                    f"{unsubscribe_footer}"
-                )
+                body = f"Greetings!!\n\nThe current exchange rate for {selected} is {current_price} {currency}, which fell below the set {low_price} {currency} limit.{unsubscribe_footer}"
+
                 if send_email_alert(st.session_state.user_email, subject, body):
                     st.session_state.sent_alerts[alert_key_low] = today_str
                     st.toast(f"📧 Stop-loss alert sent!", icon="📩")
