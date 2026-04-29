@@ -30,11 +30,47 @@ A modern, AI-powered stock tracking and portfolio management dashboard built wit
 * **Notifications:** Built-in Python `smtplib`
 
 ---
-
 ## 🚀 Installation & Setup (For Local Run)
 *If you want to run the application locally on your own machine for better privacy and to avoid Yahoo Finance rate limits:*
 
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/yourusername/StockWatcher.git](https://github.com/yourusername/StockWatcher.git)
+git clone https://github.com/yourusername/StockWatcher.git
 cd StockWatcher
+```
+
+### 2. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Set up email notifications (Optional)
+Email alerts require a Gmail account with an App Password. Without this, the app works fine but won't send email notifications.
+
+**Step 1:** Enable 2-Step Verification on your Google account at [myaccount.google.com/security](https://myaccount.google.com/security)
+
+**Step 2:** Generate an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+- Select "Mail" as the app
+- Copy the generated 16-character password
+
+**Step 3:** Create the secrets file:
+```bash
+mkdir .streamlit
+```
+Create a file called `.streamlit/secrets.toml` with the following content:
+```toml
+EMAIL_USER = "your_gmail_address@gmail.com"
+EMAIL_PASSWORD = "xxxx xxxx xxxx xxxx"
+```
+> ⚠️ **Never commit this file to GitHub!** It is already listed in `.gitignore` for your protection.
+
+### 4. Run the application
+```bash
+streamlit run app.py
+```
+
+The app will open automatically in your browser at `http://localhost:8501`.
+
+---
+
+> 💡 **No secrets file?** The app will still work fully — only email notifications will be disabled. You can add the secrets file at any time to enable them.
