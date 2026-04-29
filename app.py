@@ -203,7 +203,7 @@ def get_exchange_rate(currency, target="USD"):
 
 def send_email_alert(target_email, subject, body):
     if "EMAIL_USER" not in st.secrets or "EMAIL_PASSWORD" not in st.secrets:
-        st.error("❌ Error while sending the email: Missing API secrets!")
+        print("❌ Error while sending the email: Missing API secrets!")
         return False
         
     sender_email = st.secrets["EMAIL_USER"]
