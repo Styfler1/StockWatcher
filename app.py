@@ -47,6 +47,10 @@ st.markdown("""
                 padding-top: 3rem !important;
             }
         }
+            
+        h1 {
+            font-size: 1.8rem !important;
+        }
 
         [data-testid="stAppViewBlockContainer"] {
             padding-top: 1rem !important;
