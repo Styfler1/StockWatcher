@@ -514,15 +514,6 @@ run_global_alerts()
 
 
 
-
-
-
-
-# Navigation
-
-menu = st.sidebar.selectbox("Select item:", ["📈 StockWatcher", "💰 My Portfolio", "📚 Investment Smart", "ℹ️ About the program"])
-
-
 #Auto refresh
 st.sidebar.divider()
 auto_refresh_enabled = st.sidebar.toggle(
@@ -534,6 +525,14 @@ auto_refresh_enabled = st.sidebar.toggle(
 if auto_refresh_enabled:
     from streamlit_autorefresh import st_autorefresh
     st_autorefresh(interval=60000, key="stock_watcher_refresh")
+
+
+
+# Navigation
+
+menu = st.sidebar.selectbox("Select item:", ["📈 StockWatcher", "💰 My Portfolio", "📚 Investment Smart", "ℹ️ About the program"])
+
+
 
 # REQUEST API KEY GLOBALLY
 with st.sidebar.expander("🔑 AI Settings (Free)"):
