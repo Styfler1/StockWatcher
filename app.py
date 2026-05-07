@@ -427,9 +427,19 @@ def run_global_alerts():
     unsubscribe_footer = "\n\n---\nIf you would like to stop receiving such notifications, visit the app."
     global_api_key = st.session_state.get('groq_api_key', '')
 
+    # Ez tárolja az összes UUID-t amit EBBEN a session-ben láttunk először
+    # (tehát az oldal megnyitásakor már meglévő híreket)
+    if 'session_baseline_news' not in st.session_state:
+        st.session_state.session_baseline_news = set()
+    
+    # Ez jelzi, hogy már lefutott-e az inicializálás ebben a session-ben
+    if 'news_baseline_initialized' not in st.session_state:
+        st.session_state.news_baseline_initialized = set()
+
     news_memory_changed = False
 
     for ticker_sym in all_watched:
+        # --- ÁR RIASZTÁS (változatlan, ez már működik) ---
         price_data = get_live_price(ticker_sym)
         if price_data:
             curr_p = price_data['c']
@@ -463,56 +473,67 @@ def run_global_alerts():
                             st.session_state.sent_alerts[alert_key] = today_str
                             st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
 
-        if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
-            try:
-                t_obj = yf.Ticker(ticker_sym)
-                news = t_obj.news
-            except:
-                news = []
-            
-            if news:
-                sub_time = st.session_state.news_subs_times.get(ticker_sym, int(time.time()))
-                emails_sent_in_this_round = 0
-                
-                for item in news[:5]:
-                    n_data = item.get('content', item)
-                    pub_time_str = n_data.get('pubDate') or n_data.get('displayTime')
-                    pub_time = 0
-                    if pub_time_str:
-                        try:
-                            pub_time = int(pd.to_datetime(pub_time_str).timestamp())
-                        except Exception:
-                            pub_time = 0
-                    
-                    raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or "#"
-                    link = raw_link if isinstance(raw_link, str) else "#"
-                    title = n_data.get('title', 'New news')
-                    n_uuid = n_data.get('uuid') or link or title
-                    
-                    if n_uuid not in st.session_state.seen_news:
-                        st.session_state.seen_news.add(n_uuid)
-                        news_memory_changed = True
-                        
-                        is_brand_new = pub_time >= (sub_time - 300) if pub_time > 0 else False
-                        
-                        if is_brand_new and emails_sent_in_this_round < 1:
-                            ai_analysis = ""
-                            if global_api_key:
-                                try:
-                                    ai_analysis = analyze_news_with_groq(title, n_data.get('summary',''), ticker_sym, global_api_key)
-                                except:
-                                    ai_analysis = "AI analysis unavailable."
+        # --- HÍR ÉRTESÍTÉS (újraírt logika) ---
+        if ticker_sym not in st.session_state.subscribed_news or not st.session_state.user_email:
+            continue
 
-                            subject = f"📰 NEW: {ticker_sym}"
-                            body = f"New info for {ticker_sym}:\n{title}\nLink: {link}\n\nAI: {ai_analysis}{unsubscribe_footer}"
-                            
-                            if send_email_alert(st.session_state.user_email, subject, body):
-                                emails_sent_in_this_round += 1
-                                st.toast(f"📧 Email sent: {ticker_sym}", icon="📩")
+        try:
+            t_obj = yf.Ticker(ticker_sym)
+            news = t_obj.news
+        except:
+            news = []
+        
+        if not news:
+            continue
+
+        for item in news[:10]:
+            n_data = item.get('content', item)
+            raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or "#"
+            link = raw_link if isinstance(raw_link, str) else "#"
+            title = n_data.get('title', 'New news')
+            n_uuid = n_data.get('uuid') or link or title
+
+            # FÁZIS 1: Ha ez a ticker még nem volt inicializálva ebben a session-ben,
+            # csak eltároljuk a baseline-ba, NEM küldünk emailt
+            if ticker_sym not in st.session_state.news_baseline_initialized:
+                st.session_state.session_baseline_news.add(n_uuid)
+                if n_uuid not in st.session_state.seen_news:
+                    st.session_state.seen_news.add(n_uuid)
+                    news_memory_changed = True
+                continue  # Nem küldünk emailt az inicializáláskor!
+
+            # FÁZIS 2: Ticker már inicializálva van – csak az IGAZÁN új híreket küldjük
+            if n_uuid in st.session_state.seen_news:
+                continue  # Már ismert hír, kihagyjuk
+            
+            if n_uuid in st.session_state.session_baseline_news:
+                continue  # Az oldal megnyitásakor már létező hír, kihagyjuk
+
+            # Ez egy valóban új hír! Elmentjük és emailt küldünk
+            st.session_state.seen_news.add(n_uuid)
+            st.session_state.session_baseline_news.add(n_uuid)
+            news_memory_changed = True
+
+            ai_analysis = ""
+            if global_api_key:
+                try:
+                    ai_analysis = analyze_news_with_groq(title, n_data.get('summary', ''), ticker_sym, global_api_key)
+                except:
+                    ai_analysis = "AI analysis unavailable."
+
+            subject = f"📰 NEW: {ticker_sym} - {title[:50]}"
+            body = f"New info for {ticker_sym}:\n\n{title}\n\nLink: {link}\n\nAI Analysis:\n{ai_analysis}{unsubscribe_footer}"
+            
+            if send_email_alert(st.session_state.user_email, subject, body):
+                st.toast(f"📧 Email sent: {ticker_sym}", icon="📩")
+
+        # Megjelöljük, hogy ez a ticker már inicializálva van ebben a session-ben
+        if ticker_sym not in st.session_state.news_baseline_initialized:
+            st.session_state.news_baseline_initialized.add(ticker_sym)
+
     if news_memory_changed:
-            # A kulcsba beletesszük a hosszt, így a Streamlit mindig rögzíti a böngészőbe!
-            save_key = f"news_save_v3_{len(st.session_state.seen_news)}"
-            localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=save_key)
+        save_key = f"news_save_v4_{len(st.session_state.seen_news)}"
+        localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=save_key)
 
 run_global_alerts()
 
