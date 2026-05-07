@@ -108,6 +108,8 @@ if 'price_alerts' not in st.session_state:
     st.session_state.price_alerts = {}
 if 'ai_analyses' not in st.session_state:
     st.session_state.ai_analyses = {}
+if 'news_baseline_captured' not in st.session_state:
+    st.session_state.news_baseline_captured = {}
 
 saved_news_subs_times = localS.getItem("stored_news_subs_times")
 if saved_news_subs_times is not None and 'news_subs_times' not in st.session_state:
