@@ -427,24 +427,12 @@ def run_global_alerts():
     unsubscribe_footer = "\n\n---\nIf you would like to stop receiving such notifications, visit the app."
     global_api_key = st.session_state.get('groq_api_key', '')
 
-    # Ez tárolja az összes UUID-t amit EBBEN a session-ben láttunk először
-    # (tehát az oldal megnyitásakor már meglévő híreket)
-    if 'session_baseline_news' not in st.session_state:
-        st.session_state.session_baseline_news = set()
-    
-    # Ez jelzi, hogy már lefutott-e az inicializálás ebben a session-ben
-    if 'news_baseline_initialized' not in st.session_state:
-        st.session_state.news_baseline_initialized = set()
-
-    news_memory_changed = False
-
     for ticker_sym in all_watched:
-        # --- ÁR RIASZTÁS (változatlan, ez már működik) ---
+
         price_data = get_live_price(ticker_sym)
         if price_data:
             curr_p = price_data['c']
             alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
-            
             try:
                 ticker_info = get_stock_details(ticker_sym)
                 curr_symbol = ticker_info.get('currency', 'USD')
@@ -452,8 +440,8 @@ def run_global_alerts():
                 curr_symbol = 'USD'
 
             if ticker_sym in st.session_state.subscribed_alerts and st.session_state.user_email:
-                low_l = float(alert_limits["low"])
-                high_l = float(alert_limits["high"])
+                low_l = float(alert_limits.get("low", 0))
+                high_l = float(alert_limits.get("high", 0))
 
                 if low_l > 0 and curr_p < low_l:
                     alert_key = f"{ticker_sym}_low"
@@ -473,8 +461,9 @@ def run_global_alerts():
                             st.session_state.sent_alerts[alert_key] = today_str
                             st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
 
-        # --- HÍR ÉRTESÍTÉS (újraírt logika) ---
-        if ticker_sym not in st.session_state.subscribed_news or not st.session_state.user_email:
+        if ticker_sym not in st.session_state.subscribed_news:
+            continue
+        if not st.session_state.user_email:
             continue
 
         try:
@@ -482,62 +471,62 @@ def run_global_alerts():
             news = t_obj.news
         except:
             news = []
-        
+
         if not news:
             continue
 
+        current_uuids = set()
+        news_map = {}
         for item in news[:10]:
             n_data = item.get('content', item)
             raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or "#"
             link = raw_link if isinstance(raw_link, str) else "#"
             title = n_data.get('title', 'New news')
             n_uuid = n_data.get('uuid') or link or title
+            current_uuids.add(n_uuid)
+            news_map[n_uuid] = {'data': n_data, 'link': link, 'title': title}
 
-            # FÁZIS 1: Ha ez a ticker még nem volt inicializálva ebben a session-ben,
-            # csak eltároljuk a baseline-ba, NEM küldünk emailt
-            if ticker_sym not in st.session_state.news_baseline_initialized:
-                st.session_state.session_baseline_news.add(n_uuid)
-                if n_uuid not in st.session_state.seen_news:
-                    st.session_state.seen_news.add(n_uuid)
-                    news_memory_changed = True
-                continue  # Nem küldünk emailt az inicializáláskor!
+        if ticker_sym not in st.session_state.news_baseline_captured:
+            st.session_state.news_baseline_captured[ticker_sym] = set(current_uuids)
+            continue 
 
-            # FÁZIS 2: Ticker már inicializálva van – csak az IGAZÁN új híreket küldjük
-            if n_uuid in st.session_state.seen_news:
-                continue  # Már ismert hír, kihagyjuk
-            
-            if n_uuid in st.session_state.session_baseline_news:
-                continue  # Az oldal megnyitásakor már létező hír, kihagyjuk
+        baseline = st.session_state.news_baseline_captured[ticker_sym]
+        truly_new = [uid for uid in current_uuids if uid not in baseline]
 
-            # Ez egy valóban új hír! Elmentjük és emailt küldünk
-            st.session_state.seen_news.add(n_uuid)
-            st.session_state.session_baseline_news.add(n_uuid)
-            news_memory_changed = True
+        if not truly_new:
+            continue
+
+        emails_sent = 0
+        for n_uuid in truly_new[:2]:
+            n_data = news_map[n_uuid]['data']
+            link = news_map[n_uuid]['link']
+            title = news_map[n_uuid]['title']
+
+            baseline.add(n_uuid)
 
             ai_analysis = ""
             if global_api_key:
                 try:
-                    ai_analysis = analyze_news_with_groq(title, n_data.get('summary', ''), ticker_sym, global_api_key)
+                    ai_analysis = analyze_news_with_groq(
+                        title, n_data.get('summary', ''), ticker_sym, global_api_key
+                    )
                 except:
                     ai_analysis = "AI analysis unavailable."
 
-            subject = f"📰 NEW: {ticker_sym} - {title[:50]}"
-            body = f"New info for {ticker_sym}:\n\n{title}\n\nLink: {link}\n\nAI Analysis:\n{ai_analysis}{unsubscribe_footer}"
-            
+            subject = f"📰 {ticker_sym}: {title[:60]}"
+            body = (
+                f"New article about {ticker_sym}:\n\n"
+                f"{title}\n\n"
+                f"Link: {link}\n\n"
+                f"AI Analysis:\n{ai_analysis}"
+                f"{unsubscribe_footer}"
+            )
+
             if send_email_alert(st.session_state.user_email, subject, body):
-                st.toast(f"📧 Email sent: {ticker_sym}", icon="📩")
-
-        # Megjelöljük, hogy ez a ticker már inicializálva van ebben a session-ben
-        if ticker_sym not in st.session_state.news_baseline_initialized:
-            st.session_state.news_baseline_initialized.add(ticker_sym)
-
-    if news_memory_changed:
-        save_key = f"news_save_v4_{len(st.session_state.seen_news)}"
-        localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=save_key)
+                emails_sent += 1
+                st.toast(f"📧 News email sent: {ticker_sym}", icon="📩")
 
 run_global_alerts()
-
-
 
 
 
@@ -1550,8 +1539,9 @@ if not company_name or company_name == selected:
         st.session_state.current_period_idx = 2
 
     def on_period_change():
-        new_label = st.session_state.period_selector_key
-        st.session_state.current_period_idx = period_labels.index(new_label)
+        new_label = st.session_state.get('period_selector_key')
+        if new_label and new_label in period_labels:
+            st.session_state.current_period_idx = period_labels.index(new_label)
 
     sel_label = st.radio(
         "Time period:", 
