@@ -315,12 +315,7 @@ def get_live_price(symbol):
 
 @st.cache_data(ttl=3600)
 def get_stock_details(symbol):
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    })
-    
-    ticker = yf.Ticker(symbol, session=session)
+    ticker = yf.Ticker(symbol)
     try:
         info = ticker.info
         if not info or len(info) < 5: 
