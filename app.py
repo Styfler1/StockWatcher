@@ -83,6 +83,13 @@ if 'session_checked_news_tickers' not in st.session_state:
     saved_checked = localS.getItem("stored_checked_tickers")
     st.session_state.session_checked_news_tickers = set(saved_checked) if saved_checked else set()
 
+# Csak a jelenlegi munkamenetben jegyezzük fel, hogy melyik ticker volt már inicializálva
+if 'session_initialized' not in st.session_state:
+    st.session_state.session_initialized = set()
+
+# Az app indulásának pontos ideje - csak az ez utáni híreket küldjük el!
+if 'app_start_time' not in st.session_state:
+    st.session_state.app_start_time = int(time.time())
 
 if 'language' not in st.session_state:
     st.session_state.language = 'hu'
@@ -404,23 +411,13 @@ st.sidebar.divider()
 def run_global_alerts():
     all_watched = st.session_state.subscribed_alerts.union(st.session_state.subscribed_news)
     today_str = datetime.date.today().isoformat()
-    
-    unsubscribe_footer = (
-        "\n\n---\n"
-        "If you would like to stop receiving such notifications, "
-        "visit https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app."
-    )
+    unsubscribe_footer = "\n\n---\nIf you would like to stop receiving such notifications, visit the app."
     global_api_key = st.session_state.get('groq_api_key', '')
-    
-    if not global_api_key:
-        saved_key = localS.getItem("stored_groq_key")
-        if saved_key:
-            global_api_key = saved_key
-            st.session_state.groq_api_key = saved_key
+
+    news_memory_changed = False
 
     for ticker_sym in all_watched:
         price_data = get_live_price(ticker_sym)
-        
         if price_data:
             curr_p = price_data['c']
             alert_limits = st.session_state.price_alerts.get(ticker_sym, {"low": 0.0, "high": 0.0})
@@ -439,12 +436,7 @@ def run_global_alerts():
                     alert_key = f"{ticker_sym}_low"
                     if st.session_state.sent_alerts.get(alert_key) != today_str:
                         subject = f"⚠️ STOP-LOSS: {ticker_sym} fell!"
-                        body = (
-                            f"Greetings!\n\n"
-                            f"The price of {ticker_sym} is currently {curr_p} {curr_symbol}, "
-                            f"which has fallen below the set limit {low_l} {curr_symbol}."
-                            f"{unsubscribe_footer}"
-                        )
+                        body = f"Greetings!\n\nThe price of {ticker_sym} is currently {curr_p} {curr_symbol}, which has fallen below the set limit {low_l} {curr_symbol}.{unsubscribe_footer}"
                         if send_email_alert(st.session_state.user_email, subject, body):
                             st.session_state.sent_alerts[alert_key] = today_str
                             st.toast(f"📧 Stop-loss alert sent ({ticker_sym})!", icon="📩")
@@ -453,62 +445,61 @@ def run_global_alerts():
                     alert_key = f"{ticker_sym}_high"
                     if st.session_state.sent_alerts.get(alert_key) != today_str:
                         subject = f"🚀 TARGET PRICE: {ticker_sym} reached!"
-                        body = (
-                            f"Greetings!\n\n"
-                            f"The price of {ticker_sym} has reached {curr_p} {curr_symbol}, "
-                            f"thus the target flow of {high_l} {curr_symbol} has been met."
-                            f"{unsubscribe_footer}"
-                        )
+                        body = f"Greetings!\n\nThe price of {ticker_sym} has reached {curr_p} {curr_symbol}, thus the target flow of {high_l} {curr_symbol} has been met.{unsubscribe_footer}"
                         if send_email_alert(st.session_state.user_email, subject, body):
                             st.session_state.sent_alerts[alert_key] = today_str
                             st.toast(f"📧 Target price alert sent ({ticker_sym})!", icon="📩")
 
         if ticker_sym in st.session_state.subscribed_news and st.session_state.user_email:
             try:
-                ticker_obj = yf.Ticker(ticker_sym)
-                news = ticker_obj.news 
-            except Exception:
+                t_obj = yf.Ticker(ticker_sym)
+                news = t_obj.news
+            except:
                 news = []
             
             if news:
-                is_first_check_this_session = ticker_sym not in st.session_state.session_checked_news_tickers
-                
-                emails_sent_now = 0
-                new_uuids_found = False
+                sub_time = st.session_state.news_subs_times.get(ticker_sym, int(time.time()))
+                emails_sent_in_this_round = 0
                 
                 for item in news[:5]:
-                    if emails_sent_now >= 1:
-                        break
-                        
                     n_data = item.get('content', item)
+                    pub_time_str = n_data.get('pubDate') or n_data.get('displayTime')
+                    pub_time = 0
+                    if pub_time_str:
+                        try:
+                            pub_time = int(pd.to_datetime(pub_time_str).timestamp())
+                        except Exception:
+                            pub_time = 0
                     
-                    raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or n_data.get('link')
+                    raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or "#"
                     link = raw_link if isinstance(raw_link, str) else "#"
                     title = n_data.get('title', 'New news')
                     n_uuid = n_data.get('uuid') or link or title
                     
                     if n_uuid not in st.session_state.seen_news:
                         st.session_state.seen_news.add(n_uuid)
-                        new_uuids_found = True
+                        news_memory_changed = True
                         
-                        if not is_first_check_this_session:
-                            summary = n_data.get('summary', '')
+                        is_brand_new = pub_time >= (sub_time - 300) if pub_time > 0 else False
+                        
+                        if is_brand_new and emails_sent_in_this_round < 1:
                             ai_analysis = ""
                             if global_api_key:
-                                ai_analysis = analyze_news_with_groq(title, summary, ticker_sym, global_api_key)
+                                try:
+                                    ai_analysis = analyze_news_with_groq(title, n_data.get('summary',''), ticker_sym, global_api_key)
+                                except:
+                                    ai_analysis = "AI analysis unavailable."
 
-                            subject = f"📰 NEW News: {ticker_sym}"
-                            body = f"Greetings!\n\nNew info for {ticker_sym}:\n{title}\nLink: {link}\n\nAI: {ai_analysis}\n{unsubscribe_footer}"
+                            subject = f"📰 NEW: {ticker_sym}"
+                            body = f"New info for {ticker_sym}:\n{title}\nLink: {link}\n\nAI: {ai_analysis}{unsubscribe_footer}"
                             
                             if send_email_alert(st.session_state.user_email, subject, body):
-                                emails_sent_now += 1
-                                st.toast(f"📧 Sent: {ticker_sym} news!", icon="📩")
-                
-                if new_uuids_found:
-                    localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=f"save_seen_news_{ticker_sym}")
-                    
-                st.session_state.session_checked_news_tickers.add(ticker_sym)
-                localS.setItem("stored_checked_tickers", list(st.session_state.session_checked_news_tickers), key=f"save_checked_{ticker_sym}")
+                                emails_sent_in_this_round += 1
+                                st.toast(f"📧 Email sent: {ticker_sym}", icon="📩")
+    if news_memory_changed:
+            # A kulcsba beletesszük a hosszt, így a Streamlit mindig rögzíti a böngészőbe!
+            save_key = f"news_save_v3_{len(st.session_state.seen_news)}"
+            localS.setItem("stored_seen_news", list(st.session_state.seen_news), key=save_key)
 
 run_global_alerts()
 
@@ -1352,8 +1343,17 @@ else:
     draw_stock_buttons(popular_list, "pop")
 
     selected = st.session_state.selected_stock
-    info = get_stock_details(selected)
-    company_name = info.get('longName', selected)
+info = get_stock_details(selected)
+
+company_name = info.get('longName') or info.get('shortName')
+
+
+if not company_name or company_name == selected:
+    search_res = search_stock(selected)
+    if search_res and search_res[0]['symbol'].upper() == selected.upper():
+        company_name = search_res[0]['description']
+    else:
+        company_name = selected
 
     currency = info.get('currency', 'USD')
 
@@ -1413,6 +1413,97 @@ else:
 
 
     st.divider()
+
+    # TESZT GOMB - később törölheted
+    with st.expander("🧪 Test email sending"):
+        if st.button("📧 Send test email now"):
+            if not st.session_state.user_email:
+                st.error("Please enter your email address first in the Notification settings!")
+            else:
+                test_subject = "✅ StockWatcher - Test email"
+                test_body = f"Hello!\n\nThis is a test email from StockWatcher.\n\nIf you received this, email notifications are working correctly!\n\nTest time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                result = send_email_alert(st.session_state.user_email, test_subject, test_body)
+                if result:
+                    st.success("✅ Test email sent successfully! Check your inbox.")
+                else:
+                    st.error("❌ Sending failed! Check the terminal for details.")
+        
+        if st.button("🗑️ Clear seen news (force re-check)"):
+            st.session_state.seen_news = set()
+            st.session_state.session_checked_news_tickers = set()
+            localS.setItem("stored_seen_news", [], key="clear_seen_news")
+            localS.setItem("stored_checked_tickers", [], key="clear_checked")
+            st.success("✅ Cleared! On the next auto-refresh all news will be re-registered, and on the one after that new emails will be sent.")
+
+
+        if st.button("📨 Force send news email now"):
+            sent_count = 0
+            for ticker_sym in list(st.session_state.subscribed_news)[:2]:  # csak 2 ticker a teszthez
+                try:
+                    ticker_obj = yf.Ticker(ticker_sym)
+                    news = ticker_obj.news
+                    if news:
+                        n_data = news[0].get('content', news[0])
+                        title = n_data.get('title', 'No title')
+                        raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or '#'
+                        link = raw_link if isinstance(raw_link, str) else '#'
+                        
+                        subject = f"📰 TEST News: {ticker_sym}"
+                        body = f"Test email!\n\nTicker: {ticker_sym}\nTitle: {title}\nLink: {link}"
+                        
+                        result = send_email_alert(st.session_state.user_email, subject, body)
+                        st.write(f"{ticker_sym}: {'✅ Sent' if result else '❌ Failed'}")
+                        if result:
+                            sent_count += 1
+                except Exception as e:
+                    st.error(f"{ticker_sym} hiba: {e}")
+            st.write(f"Total sent: {sent_count}")
+
+        if st.button("🔍 Debug: Check news manually"):
+            st.write("---")
+            st.write(f"**Email:** {st.session_state.user_email}")
+            st.write(f"**seen_news count:** {len(st.session_state.seen_news)}")
+            
+            for ticker_sym in st.session_state.subscribed_news:
+                st.write(f"---")
+                st.write(f"**Ticker: {ticker_sym}**")
+                
+                sub_time = st.session_state.news_subs_times.get(ticker_sym, int(time.time()))
+                sub_time_str = datetime.datetime.fromtimestamp(sub_time).strftime('%Y-%m-%d %H:%M:%S')
+                st.write(f"Feliratkozás ideje: **{sub_time_str}**")
+                
+                try:
+                    ticker_obj = yf.Ticker(ticker_sym)
+                    news = ticker_obj.news
+                    st.write(f"Hírek száma: {len(news) if news else 0}")
+                    
+                    if news:
+                        for i, item in enumerate(news[:3]):
+                            n_data = item.get('content', item)
+                            title = n_data.get('title', 'N/A')
+                            n_uuid = n_data.get('uuid') or n_data.get('url') or title
+                            
+                            pub_time_str_raw = n_data.get('pubDate') or n_data.get('displayTime')
+                            pub_time = 0
+                            if pub_time_str_raw:
+                                try:
+                                    pub_time = int(pd.to_datetime(pub_time_str_raw).timestamp())
+                                except:
+                                    pass
+                            
+                            if pub_time > 0:
+                                pub_time_str = datetime.datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d %H:%M:%S')
+                            else:
+                                pub_time_str = f"Nem található a nyers szövegből: {pub_time_str_raw}"
+                                
+                            is_new_uuid = n_uuid not in st.session_state.seen_news
+                            is_brand_new_time = pub_time >= (sub_time - 300) if pub_time > 0 else False
+                            
+                            st.write(f"  Cikk {i+1}: '{title[:40]}'")
+                            st.write(f"  --> Publikálva: {pub_time_str}")
+                            st.write(f"  --> UUID új?: {is_new_uuid} | Feliratkozás utáni?: {is_brand_new_time}")
+                except Exception as e:
+                    st.error(f"Hiba: {e}")
 
     live_data = get_live_price(selected)
     current_price = live_data.get('c', 'N/A')
