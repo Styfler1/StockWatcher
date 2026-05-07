@@ -316,11 +316,25 @@ def get_live_price(symbol):
 @st.cache_data(ttl=3600)
 def get_stock_details(symbol):
     ticker = yf.Ticker(symbol)
+    
     try:
         info = ticker.info
-        if not info or len(info) < 5: 
-            raise Exception("Missing data")
-        return info
+        if info and len(info) > 5:
+            return info
+    except:
+        pass
+        
+    try:
+        fast = ticker.fast_info
+        
+        return {
+            'longName': symbol,
+            'currency': fast.get('currency', 'USD'),
+            'sector': 'Unknown (Rate Limit)',
+            'marketCap': fast.get('marketCap', 0),
+            'trailingPE': 'N/A',
+            'fiftyTwoWeekHigh': round(fast.get('yearHigh', 0), 2) if fast.get('yearHigh') else 'N/A'
+        }
     except Exception as e:
         return {
             'longName': symbol,
@@ -330,7 +344,6 @@ def get_stock_details(symbol):
             'trailingPE': 'N/A',
             'fiftyTwoWeekHigh': 'N/A'
         }
-
 
 @st.cache_data(ttl=3600)
 def get_cached_ticker_data(symbol):
