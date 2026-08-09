@@ -21,8 +21,7 @@ from streamlit_autorefresh import st_autorefresh
 
 localS = LocalStorage()
 
-# Page title
-st.set_page_config(page_title="StockWatcher", page_icon="📈", layout="wide")
+
 
 # Styles
 
@@ -74,6 +73,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# Page title
+st.set_page_config(page_title="StockWatcher", page_icon="📈", layout="wide")
 
 # Session states
 
@@ -1379,22 +1380,20 @@ else:
         else:
             company_name = selected
 
-    # INNENTŐL KILÉPTÜNK AZ IF-BŐL (egy vonalban van az if-fel)
-    currency = info.get('currency', 'USD')
+        currency = info.get('currency', 'USD')
 
-    def toggle_favorite():
-        if st.session_state[f"check_{selected}"]:
-            st.session_state.favorites.add(selected)
-        else:
-            st.session_state.favorites.discard(selected)
-        if 'localS' in globals():
-            localS.setItem("stored_favorites", list(st.session_state.favorites))
+        def toggle_favorite():
+            if st.session_state[f"check_{selected}"]:
+                st.session_state.favorites.add(selected)
+            else:
+                st.session_state.favorites.discard(selected)
+            if 'localS' in globals():
+                localS.setItem("stored_favorites", list(st.session_state.favorites))
 
-    col_title, col_sentiment = st.columns([0.4, 0.6])
 
-    # ... és az összes többi kód a fájl végéig itt folytatódik, ugyanígy visszahúzva ...
+        col_title, col_sentiment = st.columns([0.4, 0.6])
 
-    with col_title:
+        with col_title:
 
             title_col, star_col = st.columns([0.5, 0.8])
 
