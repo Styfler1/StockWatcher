@@ -1379,18 +1379,20 @@ else:
         else:
             company_name = selected
 
-        currency = info.get('currency', 'USD')
+    # INNENTŐL KILÉPTÜNK AZ IF-BŐL (egy vonalban van az if-fel)
+    currency = info.get('currency', 'USD')
 
-        def toggle_favorite():
-            if st.session_state[f"check_{selected}"]:
-                st.session_state.favorites.add(selected)
-            else:
-                st.session_state.favorites.discard(selected)
-            if 'localS' in globals():
-                localS.setItem("stored_favorites", list(st.session_state.favorites))
+    def toggle_favorite():
+        if st.session_state[f"check_{selected}"]:
+            st.session_state.favorites.add(selected)
+        else:
+            st.session_state.favorites.discard(selected)
+        if 'localS' in globals():
+            localS.setItem("stored_favorites", list(st.session_state.favorites))
 
+    col_title, col_sentiment = st.columns([0.4, 0.6])
 
-        col_title, col_sentiment = st.columns([0.4, 0.6])
+    # ... és az összes többi kód a fájl végéig itt folytatódik, ugyanígy visszahúzva ...
 
         with col_title:
 
