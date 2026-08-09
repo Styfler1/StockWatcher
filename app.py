@@ -1391,365 +1391,365 @@ else:
         if 'localS' in globals():
             localS.setItem("stored_favorites", list(st.session_state.favorites))
 
-        col_title, col_sentiment = st.columns([0.4, 0.6])
+    col_title, col_sentiment = st.columns([0.4, 0.6])
 
-    # ... és az összes többi kód a fájl végéig itt folytatódik, ugyanígy visszahúzva ...
+# ... és az összes többi kód a fájl végéig itt folytatódik, ugyanígy visszahúzva ...
 
-        with col_title:
+    with col_title:
 
-            title_col, star_col = st.columns([0.5, 0.8])
+        title_col, star_col = st.columns([0.5, 0.8])
 
-            with title_col:
-                st.title(f"📊 {selected}")
-                
-            with star_col:
-                st.markdown('<div style="padding-top: 25px;"></div>', unsafe_allow_html=True)
-                is_fav = selected in st.session_state.favorites
-                st.checkbox(
-                    "⭐", 
-                    value=is_fav, 
-                    key=f"check_{selected}", 
-                    on_change=toggle_favorite,
-            )
-
-            st.caption(company_name)
-
-        with col_sentiment:
-            sentiment_val = get_market_sentiment()
+        with title_col:
+            st.title(f"📊 {selected}")
             
-            
-            if sentiment_val < 30: emoji, label = "😨", "Extreme Fear"
-            elif sentiment_val < 45: emoji, label = "😟", "Fear"
-            elif sentiment_val < 55: emoji, label = "😐", "Neutral"
-            elif sentiment_val < 70: emoji, label = "🙂", "Greed"
-            else: emoji, label = "🤑", "Extreme Greed"
+        with star_col:
+            st.markdown('<div style="padding-top: 25px;"></div>', unsafe_allow_html=True)
+            is_fav = selected in st.session_state.favorites
+            st.checkbox(
+                "⭐", 
+                value=is_fav, 
+                key=f"check_{selected}", 
+                on_change=toggle_favorite,
+        )
 
-            st.markdown(f"""
-                <div style="padding-top: 5px;">
-                    <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fafafa;">
-                        Market Mood: <span style="color: #00ffcc;">{label}</span>
-                    </div>
-                    <div style="width: 100%; background-color: #333; border-radius: 10px; height: 8px; position: relative; margin-top: 15px;">
-                        <div style="position: absolute; left: {sentiment_val}%; top: -14px; font-size: 20px; transform: translateX(-50%); transition: all 0.5s; z-index: 10;">
-                            {emoji}
-                        </div>
-                        <div style="width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(to right, #ff4b4b, #ffa421, #f0f2f6, #90ee90, #2ecc71);"></div>
-                    </div>
+        st.caption(company_name)
+
+    with col_sentiment:
+        sentiment_val = get_market_sentiment()
+        
+        
+        if sentiment_val < 30: emoji, label = "😨", "Extreme Fear"
+        elif sentiment_val < 45: emoji, label = "😟", "Fear"
+        elif sentiment_val < 55: emoji, label = "😐", "Neutral"
+        elif sentiment_val < 70: emoji, label = "🙂", "Greed"
+        else: emoji, label = "🤑", "Extreme Greed"
+
+        st.markdown(f"""
+            <div style="padding-top: 5px;">
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fafafa;">
+                    Market Mood: <span style="color: #00ffcc;">{label}</span>
                 </div>
-            """, unsafe_allow_html=True)
+                <div style="width: 100%; background-color: #333; border-radius: 10px; height: 8px; position: relative; margin-top: 15px;">
+                    <div style="position: absolute; left: {sentiment_val}%; top: -14px; font-size: 20px; transform: translateX(-50%); transition: all 0.5s; z-index: 10;">
+                        {emoji}
+                    </div>
+                    <div style="width: 100%; height: 100%; border-radius: 10px; background: linear-gradient(to right, #ff4b4b, #ffa421, #f0f2f6, #90ee90, #2ecc71);"></div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 
-        st.divider()
+    st.divider()
 
-        # TESZT GOMB - később törölheted
-        with st.expander("🧪 Test email sending"):
-            if st.button("📧 Send test email now"):
-                if not st.session_state.user_email:
-                    st.error("Please enter your email address first in the Notification settings!")
+    # TESZT GOMB - később törölheted
+    with st.expander("🧪 Test email sending"):
+        if st.button("📧 Send test email now"):
+            if not st.session_state.user_email:
+                st.error("Please enter your email address first in the Notification settings!")
+            else:
+                test_subject = "✅ StockWatcher - Test email"
+                test_body = f"Hello!\n\nThis is a test email from StockWatcher.\n\nIf you received this, email notifications are working correctly!\n\nTest time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                result = send_email_alert(st.session_state.user_email, test_subject, test_body)
+                if result:
+                    st.success("✅ Test email sent successfully! Check your inbox.")
                 else:
-                    test_subject = "✅ StockWatcher - Test email"
-                    test_body = f"Hello!\n\nThis is a test email from StockWatcher.\n\nIf you received this, email notifications are working correctly!\n\nTest time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    result = send_email_alert(st.session_state.user_email, test_subject, test_body)
-                    if result:
-                        st.success("✅ Test email sent successfully! Check your inbox.")
-                    else:
-                        st.error("❌ Sending failed! Check the terminal for details.")
-            
-            if st.button("🗑️ Clear seen news (force re-check)"):
-                st.session_state.seen_news = set()
-                st.session_state.session_checked_news_tickers = set()
-                localS.setItem("stored_seen_news", [], key="clear_seen_news")
-                localS.setItem("stored_checked_tickers", [], key="clear_checked")
-                st.success("✅ Cleared! On the next auto-refresh all news will be re-registered, and on the one after that new emails will be sent.")
+                    st.error("❌ Sending failed! Check the terminal for details.")
+        
+        if st.button("🗑️ Clear seen news (force re-check)"):
+            st.session_state.seen_news = set()
+            st.session_state.session_checked_news_tickers = set()
+            localS.setItem("stored_seen_news", [], key="clear_seen_news")
+            localS.setItem("stored_checked_tickers", [], key="clear_checked")
+            st.success("✅ Cleared! On the next auto-refresh all news will be re-registered, and on the one after that new emails will be sent.")
 
 
-            if st.button("📨 Force send news email now"):
-                sent_count = 0
-                for ticker_sym in list(st.session_state.subscribed_news)[:2]:  # csak 2 ticker a teszthez
-                    try:
-                        ticker_obj = yf.Ticker(ticker_sym)
-                        news = ticker_obj.news
-                        if news:
-                            n_data = news[0].get('content', news[0])
-                            title = n_data.get('title', 'No title')
-                            raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or '#'
-                            link = raw_link if isinstance(raw_link, str) else '#'
-                            
-                            subject = f"📰 TEST News: {ticker_sym}"
-                            body = f"Test email!\n\nTicker: {ticker_sym}\nTitle: {title}\nLink: {link}"
-                            
-                            result = send_email_alert(st.session_state.user_email, subject, body)
-                            st.write(f"{ticker_sym}: {'✅ Sent' if result else '❌ Failed'}")
-                            if result:
-                                sent_count += 1
-                    except Exception as e:
-                        st.error(f"{ticker_sym} hiba: {e}")
-                st.write(f"Total sent: {sent_count}")
-
-            if st.button("🔍 Debug: Check news manually"):
-                st.write("---")
-                st.write(f"**Email:** {st.session_state.user_email}")
-                st.write(f"**seen_news count:** {len(st.session_state.seen_news)}")
-                
-                for ticker_sym in st.session_state.subscribed_news:
-                    st.write(f"---")
-                    st.write(f"**Ticker: {ticker_sym}**")
-                    
-                    sub_time = st.session_state.news_subs_times.get(ticker_sym, int(time.time()))
-                    sub_time_str = datetime.datetime.fromtimestamp(sub_time).strftime('%Y-%m-%d %H:%M:%S')
-                    st.write(f"Feliratkozás ideje: **{sub_time_str}**")
-                    
-                    try:
-                        ticker_obj = yf.Ticker(ticker_sym)
-                        news = ticker_obj.news
-                        st.write(f"Hírek száma: {len(news) if news else 0}")
+        if st.button("📨 Force send news email now"):
+            sent_count = 0
+            for ticker_sym in list(st.session_state.subscribed_news)[:2]:  # csak 2 ticker a teszthez
+                try:
+                    ticker_obj = yf.Ticker(ticker_sym)
+                    news = ticker_obj.news
+                    if news:
+                        n_data = news[0].get('content', news[0])
+                        title = n_data.get('title', 'No title')
+                        raw_link = n_data.get('url') or n_data.get('clickThroughUrl') or '#'
+                        link = raw_link if isinstance(raw_link, str) else '#'
                         
-                        if news:
-                            for i, item in enumerate(news[:3]):
-                                n_data = item.get('content', item)
-                                title = n_data.get('title', 'N/A')
-                                n_uuid = n_data.get('uuid') or n_data.get('url') or title
+                        subject = f"📰 TEST News: {ticker_sym}"
+                        body = f"Test email!\n\nTicker: {ticker_sym}\nTitle: {title}\nLink: {link}"
+                        
+                        result = send_email_alert(st.session_state.user_email, subject, body)
+                        st.write(f"{ticker_sym}: {'✅ Sent' if result else '❌ Failed'}")
+                        if result:
+                            sent_count += 1
+                except Exception as e:
+                    st.error(f"{ticker_sym} hiba: {e}")
+            st.write(f"Total sent: {sent_count}")
+
+        if st.button("🔍 Debug: Check news manually"):
+            st.write("---")
+            st.write(f"**Email:** {st.session_state.user_email}")
+            st.write(f"**seen_news count:** {len(st.session_state.seen_news)}")
+            
+            for ticker_sym in st.session_state.subscribed_news:
+                st.write(f"---")
+                st.write(f"**Ticker: {ticker_sym}**")
+                
+                sub_time = st.session_state.news_subs_times.get(ticker_sym, int(time.time()))
+                sub_time_str = datetime.datetime.fromtimestamp(sub_time).strftime('%Y-%m-%d %H:%M:%S')
+                st.write(f"Feliratkozás ideje: **{sub_time_str}**")
+                
+                try:
+                    ticker_obj = yf.Ticker(ticker_sym)
+                    news = ticker_obj.news
+                    st.write(f"Hírek száma: {len(news) if news else 0}")
+                    
+                    if news:
+                        for i, item in enumerate(news[:3]):
+                            n_data = item.get('content', item)
+                            title = n_data.get('title', 'N/A')
+                            n_uuid = n_data.get('uuid') or n_data.get('url') or title
+                            
+                            pub_time_str_raw = n_data.get('pubDate') or n_data.get('displayTime')
+                            pub_time = 0
+                            if pub_time_str_raw:
+                                try:
+                                    pub_time = int(pd.to_datetime(pub_time_str_raw).timestamp())
+                                except:
+                                    pass
+                            
+                            if pub_time > 0:
+                                pub_time_str = datetime.datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d %H:%M:%S')
+                            else:
+                                pub_time_str = f"Nem található a nyers szövegből: {pub_time_str_raw}"
                                 
-                                pub_time_str_raw = n_data.get('pubDate') or n_data.get('displayTime')
-                                pub_time = 0
-                                if pub_time_str_raw:
-                                    try:
-                                        pub_time = int(pd.to_datetime(pub_time_str_raw).timestamp())
-                                    except:
-                                        pass
-                                
-                                if pub_time > 0:
-                                    pub_time_str = datetime.datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d %H:%M:%S')
-                                else:
-                                    pub_time_str = f"Nem található a nyers szövegből: {pub_time_str_raw}"
-                                    
-                                is_new_uuid = n_uuid not in st.session_state.seen_news
-                                is_brand_new_time = pub_time >= (sub_time - 300) if pub_time > 0 else False
-                                
-                                st.write(f"  Cikk {i+1}: '{title[:40]}'")
-                                st.write(f"  --> Publikálva: {pub_time_str}")
-                                st.write(f"  --> UUID új?: {is_new_uuid} | Feliratkozás utáni?: {is_brand_new_time}")
-                    except Exception as e:
-                        st.error(f"Hiba: {e}")
+                            is_new_uuid = n_uuid not in st.session_state.seen_news
+                            is_brand_new_time = pub_time >= (sub_time - 300) if pub_time > 0 else False
+                            
+                            st.write(f"  Cikk {i+1}: '{title[:40]}'")
+                            st.write(f"  --> Publikálva: {pub_time_str}")
+                            st.write(f"  --> UUID új?: {is_new_uuid} | Feliratkozás utáni?: {is_brand_new_time}")
+                except Exception as e:
+                    st.error(f"Hiba: {e}")
 
-        live_data = get_live_price(selected)
-        current_price = live_data.get('c', 'N/A') if live_data is not None else 'N/A'
-        st.subheader(f"Current price: {current_price} {currency}")
+    live_data = get_live_price(selected)
+    current_price = live_data.get('c', 'N/A') if live_data is not None else 'N/A'
+    st.subheader(f"Current price: {current_price} {currency}")
 
-        period_options = {"5 days": "5d", "1 month": "1mo", "1 year": "1y", "5 years": "5y", "Max": "max"}
-        period_labels = list(period_options.keys())
+    period_options = {"5 days": "5d", "1 month": "1mo", "1 year": "1y", "5 years": "5y", "Max": "max"}
+    period_labels = list(period_options.keys())
 
-        if 'current_period_idx' not in st.session_state:
-            st.session_state.current_period_idx = 2
+    if 'current_period_idx' not in st.session_state:
+        st.session_state.current_period_idx = 2
 
-        def on_period_change():
-            new_label = st.session_state.get('period_selector_key')
-            if new_label and new_label in period_labels:
-                st.session_state.current_period_idx = period_labels.index(new_label)
+    def on_period_change():
+        new_label = st.session_state.get('period_selector_key')
+        if new_label and new_label in period_labels:
+            st.session_state.current_period_idx = period_labels.index(new_label)
 
-        sel_label = st.radio(
-            "Time period:", 
-            period_labels, 
-            horizontal=True, 
-            index=st.session_state.current_period_idx,
-            key="period_selector_key",
-            on_change=on_period_change
+    sel_label = st.radio(
+        "Time period:", 
+        period_labels, 
+        horizontal=True, 
+        index=st.session_state.current_period_idx,
+        key="period_selector_key",
+        on_change=on_period_change
+    )
+
+    hist_data = get_historical_data(selected, period_options[sel_label])
+    
+    if not hist_data.empty:
+        fig = px.line(hist_data, y='Close', labels={'Close': f'Price ({currency})', 'index': 'Date'})
+        fig.update_layout(xaxis={'fixedrange': True}, yaxis={'fixedrange': True}, dragmode=False, hovermode="x unified")
+        st.plotly_chart(
+            fig, 
+            use_container_width=True, 
+            config={'scrollZoom': False, 'displayModeBar': False},
+            key=f"chart_{selected}"
         )
 
-        hist_data = get_historical_data(selected, period_options[sel_label])
+    st.divider()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Market Cap", f"{info.get('marketCap', 0) / 1e9:.2f} Mrd {currency}")
+    col2.metric("P/E Ratio", info.get('trailingPE', 'N/A'))
+    col3.metric("52 Weekly Max", f"{info.get('fiftyTwoWeekHigh', 'N/A')} {currency}")
+
+    st.divider()
+
+
+
+    st.subheader("🔔 Notification settings")
+
+    
+    
+    if selected not in st.session_state.price_alerts:
+        st.session_state.price_alerts[selected] = {"low": 0.0, "high": 0.0}
+
+    is_subscribed = selected in st.session_state.subscribed_news
+
+
+    with st.container(border=True):
+        col_info, col_low, col_high = st.columns(3)
         
-        if not hist_data.empty:
-            fig = px.line(hist_data, y='Close', labels={'Close': f'Price ({currency})', 'index': 'Date'})
-            fig.update_layout(xaxis={'fixedrange': True}, yaxis={'fixedrange': True}, dragmode=False, hovermode="x unified")
-            st.plotly_chart(
-                fig, 
-                use_container_width=True, 
-                config={'scrollZoom': False, 'displayModeBar': False},
-                key=f"chart_{selected}"
+        with col_info:
+            st.write("**Notifications Status**")
+            
+            def toggle_news():
+                current_time = int(time.time())
+                
+                if st.session_state[f"news_toggle_{selected}"]:
+                    st.session_state.subscribed_news.add(selected)
+                    st.session_state.news_subs_times[selected] = current_time
+                else:
+                    st.session_state.subscribed_news.discard(selected)
+                    if selected in st.session_state.news_subs_times:
+                        del st.session_state.news_subs_times[selected]
+                        
+                localS.setItem("stored_news_subs", list(st.session_state.subscribed_news), key=f"save_news_subs_{selected}")
+                localS.setItem("stored_news_subs_times", st.session_state.news_subs_times, key=f"save_news_times_{selected}")
+
+            is_subscribed_news = selected in st.session_state.subscribed_news
+
+            st.toggle(
+                    "Request news", 
+                    value=is_subscribed_news, 
+                    key=f"news_toggle_{selected}",
+                    on_change=toggle_news
+                )
+
+            def toggle_price_sub():
+                if st.session_state[f"alert_sub_{selected}"]:
+                    st.session_state.subscribed_alerts.add(selected)
+                else:
+                    st.session_state.subscribed_alerts.discard(selected)
+                localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts), key=f"save_alert_subs_{selected}")
+
+            is_subscribed_alerts = selected in st.session_state.subscribed_alerts
+            st.toggle(
+                "Price alerts", 
+                value=is_subscribed_alerts, 
+                key=f"alert_sub_{selected}",
+                on_change=toggle_price_sub,
+                help="Turn it on if you want to receive an email when the limits below are reached."
+            )
+            
+            st.write("---")
+            
+            email_input = st.text_input("Email for alerts:", value=st.session_state.user_email, placeholder="sample@email.com")
+            if email_input != st.session_state.user_email:
+                if is_valid_email(email_input) or email_input == "":
+                    st.session_state.user_email = email_input
+                    
+                    localS.setItem("stored_email", email_input, key=f"save_email_{selected}") 
+                    # ----------------------------------------
+                    
+                    if email_input: st.success("✅ Saved!")
+                else:
+                    st.error("❌ Invalid format!")
+
+        with col_low:
+            st.write(f"**Lower limit (Stop-Loss)**")
+            
+            def update_low_limit():
+                st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
+                localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_low_{selected}")
+
+            saved_low = st.session_state.price_alerts[selected]["low"]
+            
+            low_price = st.number_input(
+                f"Alert if falls under ({currency}):", 
+                value=float(saved_low), 
+                step=1.0, 
+                key=f"low_{selected}",
+                on_change=update_low_limit
+            )
+            
+            if low_price > 0 and current_price != 'N/A':
+                dist_low = (low_price / current_price) * 100
+                dist_low = max(0, min(100, dist_low))
+                color = "#ff4b4b" if dist_low > 90 else "#ffa421"
+                
+                st.markdown(f"""
+                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Stop-loss közelség: {dist_low:.1f}%</div>
+                    <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
+                        <div style="width: {dist_low}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        with col_high:
+            st.write(f"**Upper limit (Target price)**")
+            
+            def update_high_limit():
+                st.session_state.price_alerts[selected]["high"] = st.session_state[f"high_{selected}"]
+                localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_high_{selected}")
+
+            saved_high = st.session_state.price_alerts[selected]["high"]
+            
+            high_price = st.number_input(
+                f"Alert if goes above ({currency}):", 
+                value=float(saved_high), 
+                step=1.0, 
+                key=f"high_{selected}",
+                on_change=update_high_limit
             )
 
-        st.divider()
+            if high_price > 0 and current_price != 'N/A':
+                progress_high = (current_price / high_price) * 100
+                progress_high = max(0, min(100, progress_high))
+                color = "#2ecc71" if progress_high > 95 else "#3498db"
+                
+                st.markdown(f"""
+                    <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Célár elérése: {progress_high:.1f}%</div>
+                    <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
+                        <div style="width: {progress_high}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Market Cap", f"{info.get('marketCap', 0) / 1e9:.2f} Mrd {currency}")
-        col2.metric("P/E Ratio", info.get('trailingPE', 'N/A'))
-        col3.metric("52 Weekly Max", f"{info.get('fiftyTwoWeekHigh', 'N/A')} {currency}")
-
-        st.divider()
+    if low_price > 0 and current_price != 'N/A' and current_price < low_price:
+        st.toast(f"⚠️ {selected} fell under {low_price} USD!", icon="🛑")
+    if high_price > 0 and current_price != 'N/A' and current_price > high_price:
+        st.toast(f"🚀 {selected} reached {high_price} USD!", icon="💰")
 
 
+    today_str = datetime.date.today().isoformat()
+    
+    unsubscribe_footer = (
+        "\n\n---\n"
+        "If you would like to stop receiving such notifications, "
+        "visit https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app."
+    )
 
-        st.subheader("🔔 Notification settings")
+    global_api_key = st.session_state.get('groq_api_key', '')
 
+    if st.session_state.user_email and selected in st.session_state.subscribed_alerts:
         
-        
-        if selected not in st.session_state.price_alerts:
-            st.session_state.price_alerts[selected] = {"low": 0.0, "high": 0.0}
-
-        is_subscribed = selected in st.session_state.subscribed_news
-
-
-        with st.container(border=True):
-            col_info, col_low, col_high = st.columns(3)
-            
-            with col_info:
-                st.write("**Notifications Status**")
-                
-                def toggle_news():
-                    current_time = int(time.time())
-                    
-                    if st.session_state[f"news_toggle_{selected}"]:
-                        st.session_state.subscribed_news.add(selected)
-                        st.session_state.news_subs_times[selected] = current_time
-                    else:
-                        st.session_state.subscribed_news.discard(selected)
-                        if selected in st.session_state.news_subs_times:
-                            del st.session_state.news_subs_times[selected]
-                            
-                    localS.setItem("stored_news_subs", list(st.session_state.subscribed_news), key=f"save_news_subs_{selected}")
-                    localS.setItem("stored_news_subs_times", st.session_state.news_subs_times, key=f"save_news_times_{selected}")
-
-                is_subscribed_news = selected in st.session_state.subscribed_news
-
-                st.toggle(
-                        "Request news", 
-                        value=is_subscribed_news, 
-                        key=f"news_toggle_{selected}",
-                        on_change=toggle_news
-                    )
-
-                def toggle_price_sub():
-                    if st.session_state[f"alert_sub_{selected}"]:
-                        st.session_state.subscribed_alerts.add(selected)
-                    else:
-                        st.session_state.subscribed_alerts.discard(selected)
-                    localS.setItem("stored_alert_subs", list(st.session_state.subscribed_alerts), key=f"save_alert_subs_{selected}")
-
-                is_subscribed_alerts = selected in st.session_state.subscribed_alerts
-                st.toggle(
-                    "Price alerts", 
-                    value=is_subscribed_alerts, 
-                    key=f"alert_sub_{selected}",
-                    on_change=toggle_price_sub,
-                    help="Turn it on if you want to receive an email when the limits below are reached."
-                )
-                
-                st.write("---")
-                
-                email_input = st.text_input("Email for alerts:", value=st.session_state.user_email, placeholder="sample@email.com")
-                if email_input != st.session_state.user_email:
-                    if is_valid_email(email_input) or email_input == "":
-                        st.session_state.user_email = email_input
-                        
-                        localS.setItem("stored_email", email_input, key=f"save_email_{selected}") 
-                        # ----------------------------------------
-                        
-                        if email_input: st.success("✅ Saved!")
-                    else:
-                        st.error("❌ Invalid format!")
-
-            with col_low:
-                st.write(f"**Lower limit (Stop-Loss)**")
-                
-                def update_low_limit():
-                    st.session_state.price_alerts[selected]["low"] = st.session_state[f"low_{selected}"]
-                    localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_low_{selected}")
-
-                saved_low = st.session_state.price_alerts[selected]["low"]
-                
-                low_price = st.number_input(
-                    f"Alert if falls under ({currency}):", 
-                    value=float(saved_low), 
-                    step=1.0, 
-                    key=f"low_{selected}",
-                    on_change=update_low_limit
-                )
-                
-                if low_price > 0 and current_price != 'N/A':
-                    dist_low = (low_price / current_price) * 100
-                    dist_low = max(0, min(100, dist_low))
-                    color = "#ff4b4b" if dist_low > 90 else "#ffa421"
-                    
-                    st.markdown(f"""
-                        <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Stop-loss közelség: {dist_low:.1f}%</div>
-                        <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
-                            <div style="width: {dist_low}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-            with col_high:
-                st.write(f"**Upper limit (Target price)**")
-                
-                def update_high_limit():
-                    st.session_state.price_alerts[selected]["high"] = st.session_state[f"high_{selected}"]
-                    localS.setItem("stored_alerts", st.session_state.price_alerts, key=f"save_alerts_high_{selected}")
-
-                saved_high = st.session_state.price_alerts[selected]["high"]
-                
-                high_price = st.number_input(
-                    f"Alert if goes above ({currency}):", 
-                    value=float(saved_high), 
-                    step=1.0, 
-                    key=f"high_{selected}",
-                    on_change=update_high_limit
-                )
-
-                if high_price > 0 and current_price != 'N/A':
-                    progress_high = (current_price / high_price) * 100
-                    progress_high = max(0, min(100, progress_high))
-                    color = "#2ecc71" if progress_high > 95 else "#3498db"
-                    
-                    st.markdown(f"""
-                        <div style="font-size: 11px; margin-bottom: 5px; text-align: right;">Célár elérése: {progress_high:.1f}%</div>
-                        <div style="width: 100%; background-color: #333; border-radius: 10px; height: 6px;">
-                            <div style="width: {progress_high}%; height: 100%; border-radius: 10px; background-color: {color}; transition: width 0.5s;"></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
+        alert_key_low = f"{selected}_low"
         if low_price > 0 and current_price != 'N/A' and current_price < low_price:
-            st.toast(f"⚠️ {selected} fell under {low_price} USD!", icon="🛑")
+            if st.session_state.sent_alerts.get(alert_key_low) != today_str:
+                subject = f"⚠️ STOP-LOSS {selected} fell!"
+                body = f"Greetings!!\n\nThe current exchange rate for {selected} is {current_price} {currency}, which fell below the set {low_price} {currency} limit.{unsubscribe_footer}"
+
+                if send_email_alert(st.session_state.user_email, subject, body):
+                    st.session_state.sent_alerts[alert_key_low] = today_str
+                    st.toast(f"📧 Stop-loss alert sent!", icon="📩")
+
+        alert_key_high = f"{selected}_high"
         if high_price > 0 and current_price != 'N/A' and current_price > high_price:
-            st.toast(f"🚀 {selected} reached {high_price} USD!", icon="💰")
+            if st.session_state.sent_alerts.get(alert_key_high) != today_str:
+                subject = f"🚀 Target price: {selected} reached!"
+                body = (
+                    f"Greetings!\n\n"
+                    f"The price of {selected} has reached {current_price} {currency}, "
+                    f"your {high_price} {currency} target price was met."
+                    f"{unsubscribe_footer}"
+                )
+                if send_email_alert(st.session_state.user_email, subject, body):
+                    st.session_state.sent_alerts[alert_key_high] = today_str
+                    st.toast(f"📧 Target price alert sent!", icon="📩")
 
-
-        today_str = datetime.date.today().isoformat()
-        
-        unsubscribe_footer = (
-            "\n\n---\n"
-            "If you would like to stop receiving such notifications, "
-            "visit https://stockwatcher-nyb3fc4uhqcdapktbug5yl.streamlit.app."
-        )
-
-        global_api_key = st.session_state.get('groq_api_key', '')
-
-        if st.session_state.user_email and selected in st.session_state.subscribed_alerts:
-            
-            alert_key_low = f"{selected}_low"
-            if low_price > 0 and current_price != 'N/A' and current_price < low_price:
-                if st.session_state.sent_alerts.get(alert_key_low) != today_str:
-                    subject = f"⚠️ STOP-LOSS {selected} fell!"
-                    body = f"Greetings!!\n\nThe current exchange rate for {selected} is {current_price} {currency}, which fell below the set {low_price} {currency} limit.{unsubscribe_footer}"
-
-                    if send_email_alert(st.session_state.user_email, subject, body):
-                        st.session_state.sent_alerts[alert_key_low] = today_str
-                        st.toast(f"📧 Stop-loss alert sent!", icon="📩")
-
-            alert_key_high = f"{selected}_high"
-            if high_price > 0 and current_price != 'N/A' and current_price > high_price:
-                if st.session_state.sent_alerts.get(alert_key_high) != today_str:
-                    subject = f"🚀 Target price: {selected} reached!"
-                    body = (
-                        f"Greetings!\n\n"
-                        f"The price of {selected} has reached {current_price} {currency}, "
-                        f"your {high_price} {currency} target price was met."
-                        f"{unsubscribe_footer}"
-                    )
-                    if send_email_alert(st.session_state.user_email, subject, body):
-                        st.session_state.sent_alerts[alert_key_high] = today_str
-                        st.toast(f"📧 Target price alert sent!", icon="📩")
-
-        
-        st.divider()
+    
+    st.divider()
 
 
 
@@ -1758,148 +1758,148 @@ else:
 
 
 
-        st.subheader(f"💬 AI Financial Assistant ({selected})")
-        
-        chat_key = f"messages_{selected}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = [{"role": "assistant", "content": f"Hi! I'm your AI assistant. How can I help you with {selected} stock?"}]
+    st.subheader(f"💬 AI Financial Assistant ({selected})")
+    
+    chat_key = f"messages_{selected}"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = [{"role": "assistant", "content": f"Hi! I'm your AI assistant. How can I help you with {selected} stock?"}]
 
-        chat_container = st.container(height=400, border=True)
+    chat_container = st.container(height=400, border=True)
+    with chat_container:
+        for message in st.session_state[chat_key]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    if prompt := st.text_input(f"Ask for an opinion on {selected} stock..."):
+        st.session_state[chat_key].append({"role": "user", "content": prompt})
         with chat_container:
-            for message in st.session_state[chat_key]:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-        if prompt := st.text_input(f"Ask for an opinion on {selected} stock..."):
-            st.session_state[chat_key].append({"role": "user", "content": prompt})
-            with chat_container:
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-            
-            with chat_container:
-                with st.chat_message("assistant"):
-                    if not user_api_key:
-                        st.error("❌ Please enter your Groq API key in the left sidebar to chat!")
-                    else:
-                        with st.spinner("Analysis in progress..."):
-                            try:
-                                client = OpenAI(api_key=user_api_key, base_url="https://api.groq.com/openai/v1")
-                                
-                                system_prompt = {
-                                    "role": "system", 
-                                    "content": f"You are a professional financial assistant. The user is analyzing the {selected} stock. The current price of the stock is {current_price} USD. Please respond professionally and objectively. Do not give specific investment advice."}
-                                
-                                api_messages = [system_prompt] + st.session_state[chat_key]
-                                
-                                response = client.chat.completions.create(
-                                    model="llama-3.3-70b-versatile",
-                                    messages=api_messages,
-                                    max_tokens=1024
-                                )
-                                
-                                ai_response = response.choices[0].message.content
-                                
-                                st.markdown(ai_response)
-                                st.session_state[chat_key].append({"role": "assistant", "content": ai_response})
-                                
-                            except Exception as e:
-                                st.error(f"⚠️ Network or API error: {str(e)}")
-
-        st.caption("⚠️ **Legal statement / Disclaimer:** *The answers provided by the AI ​​assistant are for educational and informational purposes only and do not constitute financial, investment or tax advice.*")
-        st.divider()
-
-        # NEWS
-        st.subheader(f"📰 Recent news ({selected})")
+            with st.chat_message("user"):
+                st.markdown(prompt)
         
-        if 'news_limit' not in st.session_state:
-            st.session_state.news_limit = 5
-        if 'news_stock' not in st.session_state:
-            st.session_state.news_stock = selected
-
-        if st.session_state.news_stock != selected:
-            st.session_state.news_limit = 5
-            st.session_state.news_stock = selected
-
-        news_items = get_stock_news(selected)
-
-        if news_items:
-            for i, item in enumerate(news_items[:st.session_state.news_limit]):
-                data = item.get('content', item)
-                
-                title = data.get('title', 'No title available')
-                
-                raw_link = data.get('url') or data.get('clickThroughUrl') or data.get('link')
-                if isinstance(raw_link, dict):
-                    link = raw_link.get('url', '#')
-                elif isinstance(raw_link, str):
-                    link = raw_link
+        with chat_container:
+            with st.chat_message("assistant"):
+                if not user_api_key:
+                    st.error("❌ Please enter your Groq API key in the left sidebar to chat!")
                 else:
-                    link = '#'
-                    
-                unique_id = f"{link}_{i}"
-                
-                img_url = ""
-                thumbnail = data.get('thumbnail')
-                if thumbnail and isinstance(thumbnail, dict):
-                    resolutions = thumbnail.get('resolutions')
-                    if resolutions and isinstance(resolutions, list) and len(resolutions) > 0:
-                        img_url = resolutions[0].get('url', '')
-                
-                publisher = data.get('publisher')
-                if not publisher and isinstance(data.get('provider'), dict):
-                    publisher = data.get('provider').get('displayName', 'Unknown source')
-                elif not publisher:
-                    publisher = 'Unknown source'
-                
-                timestamp = data.get('providerPublishTime')
-                pub_date_str = data.get('pubDate')
-                
-                if timestamp:
-                    try:
-                        pub_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y. %m. %d. %H:%M')
-                    except Exception:
-                        pub_date = "Unknown date"
-                elif isinstance(pub_date_str, str):
-                    pub_date = pub_date_str[:10].replace("-", ". ") + ". " + pub_date_str[11:16]
-                else:
-                    pub_date = "Recent news"
-                
-                with st.container(border=True):
-                    st.markdown(f"##### [{title}]({link})")
-                    col_img, col_meta, col_ai = st.columns([0.2, 0.35, 0.45]) 
-                    
-                    with col_img:
-                        if img_url:
-                            st.markdown(
-                                f'<a href="{link}" target="_blank">'
-                                f'<img src="{img_url}" width="100%" style="border-radius: 8px; object-fit: cover;">'
-                                f'</a>', 
-                                unsafe_allow_html=True
-                            )
-                        else:
-                            st.write("*(No image available)*")
+                    with st.spinner("Analysis in progress..."):
+                        try:
+                            client = OpenAI(api_key=user_api_key, base_url="https://api.groq.com/openai/v1")
                             
-                    with col_meta:
-                        st.write("") 
-                        st.caption(f"🏢 **{publisher}**")
-                        st.caption(f"🕒 {pub_date}")
-                        
-                    with col_ai:
-                        if unique_id in st.session_state.ai_analyses:
-                            st.info(st.session_state.ai_analyses[unique_id])
-                        else:
-                            if not user_api_key:
-                                st.caption("🔑 Enter a key for analysis")
-                            else:
-                                if st.button("🤖 AI Analysis", key=f"btn_{unique_id}", use_container_width=True):
-                                    with st.spinner("Analyzing..."):
-                                        summary_text = data.get('summary', '')
-                                        analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
-                                        st.session_state.ai_analyses[unique_id] = analysis
-                                        st.rerun()
+                            system_prompt = {
+                                "role": "system", 
+                                "content": f"You are a professional financial assistant. The user is analyzing the {selected} stock. The current price of the stock is {current_price} USD. Please respond professionally and objectively. Do not give specific investment advice."}
+                            
+                            api_messages = [system_prompt] + st.session_state[chat_key]
+                            
+                            response = client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=api_messages,
+                                max_tokens=1024
+                            )
+                            
+                            ai_response = response.choices[0].message.content
+                            
+                            st.markdown(ai_response)
+                            st.session_state[chat_key].append({"role": "assistant", "content": ai_response})
+                            
+                        except Exception as e:
+                            st.error(f"⚠️ Network or API error: {str(e)}")
 
-            if len(news_items) > st.session_state.news_limit:
-                st.write("")
-                if st.button("⬇️ More articles", key=f"load_more_news_{selected}", use_container_width=True):
-                    st.session_state.news_limit += 5
-                    st.rerun()
+    st.caption("⚠️ **Legal statement / Disclaimer:** *The answers provided by the AI ​​assistant are for educational and informational purposes only and do not constitute financial, investment or tax advice.*")
+    st.divider()
+
+    # NEWS
+    st.subheader(f"📰 Recent news ({selected})")
+    
+    if 'news_limit' not in st.session_state:
+        st.session_state.news_limit = 5
+    if 'news_stock' not in st.session_state:
+        st.session_state.news_stock = selected
+
+    if st.session_state.news_stock != selected:
+        st.session_state.news_limit = 5
+        st.session_state.news_stock = selected
+
+    news_items = get_stock_news(selected)
+
+    if news_items:
+        for i, item in enumerate(news_items[:st.session_state.news_limit]):
+            data = item.get('content', item)
+            
+            title = data.get('title', 'No title available')
+            
+            raw_link = data.get('url') or data.get('clickThroughUrl') or data.get('link')
+            if isinstance(raw_link, dict):
+                link = raw_link.get('url', '#')
+            elif isinstance(raw_link, str):
+                link = raw_link
+            else:
+                link = '#'
+                
+            unique_id = f"{link}_{i}"
+            
+            img_url = ""
+            thumbnail = data.get('thumbnail')
+            if thumbnail and isinstance(thumbnail, dict):
+                resolutions = thumbnail.get('resolutions')
+                if resolutions and isinstance(resolutions, list) and len(resolutions) > 0:
+                    img_url = resolutions[0].get('url', '')
+            
+            publisher = data.get('publisher')
+            if not publisher and isinstance(data.get('provider'), dict):
+                publisher = data.get('provider').get('displayName', 'Unknown source')
+            elif not publisher:
+                publisher = 'Unknown source'
+            
+            timestamp = data.get('providerPublishTime')
+            pub_date_str = data.get('pubDate')
+            
+            if timestamp:
+                try:
+                    pub_date = datetime.datetime.fromtimestamp(timestamp).strftime('%Y. %m. %d. %H:%M')
+                except Exception:
+                    pub_date = "Unknown date"
+            elif isinstance(pub_date_str, str):
+                pub_date = pub_date_str[:10].replace("-", ". ") + ". " + pub_date_str[11:16]
+            else:
+                pub_date = "Recent news"
+            
+            with st.container(border=True):
+                st.markdown(f"##### [{title}]({link})")
+                col_img, col_meta, col_ai = st.columns([0.2, 0.35, 0.45]) 
+                
+                with col_img:
+                    if img_url:
+                        st.markdown(
+                            f'<a href="{link}" target="_blank">'
+                            f'<img src="{img_url}" width="100%" style="border-radius: 8px; object-fit: cover;">'
+                            f'</a>', 
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.write("*(No image available)*")
+                        
+                with col_meta:
+                    st.write("") 
+                    st.caption(f"🏢 **{publisher}**")
+                    st.caption(f"🕒 {pub_date}")
+                    
+                with col_ai:
+                    if unique_id in st.session_state.ai_analyses:
+                        st.info(st.session_state.ai_analyses[unique_id])
+                    else:
+                        if not user_api_key:
+                            st.caption("🔑 Enter a key for analysis")
+                        else:
+                            if st.button("🤖 AI Analysis", key=f"btn_{unique_id}", use_container_width=True):
+                                with st.spinner("Analyzing..."):
+                                    summary_text = data.get('summary', '')
+                                    analysis = analyze_news_with_groq(title, summary_text, selected, user_api_key)
+                                    st.session_state.ai_analyses[unique_id] = analysis
+                                    st.rerun()
+
+        if len(news_items) > st.session_state.news_limit:
+            st.write("")
+            if st.button("⬇️ More articles", key=f"load_more_news_{selected}", use_container_width=True):
+                st.session_state.news_limit += 5
+                st.rerun()
