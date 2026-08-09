@@ -1394,7 +1394,7 @@ else:
 
     # ... és az összes többi kód a fájl végéig itt folytatódik, ugyanígy visszahúzva ...
 
-        with col_title:
+    with col_title:
 
             title_col, star_col = st.columns([0.5, 0.8])
 
